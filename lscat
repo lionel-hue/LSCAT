@@ -3,6 +3,8 @@
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
 # Version: 1.3.1 (Fixed default behavior consistency)
+# License: MIT - See LICENSE file for details
+# Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
 VERSION="1.3.1"
