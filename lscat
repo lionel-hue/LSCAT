@@ -1,0 +1,753 @@
+#!/bin/bash
+
+# =============================================================================
+# lscat - List and concatenate directory/file contents with advanced options
+# Version: 1.2.1 (Added Install Option - Fixed Regex Error)
+# =============================================================================
+
+VERSION="1.2.1"
+SCRIPT_NAME=$(basename "$0")
+
+# Default values
+DELIMITER="---"
+INCLUDE_HIDDEN=false
+COMPRESS=false
+COMPRESS_HARD=false
+SHOW_LINE_NUMBERS=false
+OUTPUT_FILES=()
+SKIP_PATTERNS=()
+DIRECTORIES=()
+CURRENT_DIR_ONLY=false
+
+# ANSI color codes for better output (will be disabled when outputting to file)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# Flag to track if we're writing to file (so we can disable colors)
+WRITING_TO_FILE=false
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+print_help() {
+    # Plain text help (no ANSI codes)
+    echo "lscat - List and Concatenate Tool"
+    echo "Version: $VERSION"
+    echo ""
+    echo "DESCRIPTION:"
+    echo "  Recursively lists directory structure and concatenates file contents with"
+    echo "  customizable delimiters. Useful for AI analysis, documentation, or bulk"
+    echo "  file processing."
+    echo ""
+    echo "USAGE:"
+    echo "  $SCRIPT_NAME [OPTIONS] [DIRECTORIES...]"
+    echo ""
+    echo "  If no directories specified, shows non-recursive listing of current directory"
+    echo "  Use '.' for recursive listing of current directory"
+    echo ""
+    echo "OPTIONS:"
+    echo "  -d, --dir DIR1 [DIR2...]   Directories to process (positional also works)"
+    echo "  -s, --skip PATTERN         Skip files/dirs matching pattern (can use multiple)"
+    echo "  -a, --all                  Include hidden files and directories"
+    echo "  -D, --destination FILE     Output file(s) (creates if doesn't exist)"
+    echo "  -de, --delimiter CHAR      Delimiter between file contents (default: \"---\")"
+    echo "  -c, --compress             Compress content (remove indentation and blank lines)"
+    echo "  -C, --compress-hard        Aggressive compression (remove all formatting, one-line per file)"
+    echo "  -l, --line-numbers         Show line numbers in file contents"
+    echo "  -i, --install              Install lscat system-wide (standalone option)"
+    echo "  -h, --help                 Show this help message"
+    echo "  -v, --version              Show version information"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  $SCRIPT_NAME                           # Non-recursive list of current directory"
+    echo "  $SCRIPT_NAME .                         # Recursive list with file contents"
+    echo "  $SCRIPT_NAME -d src lib                # Process src and lib directories"
+    echo "  $SCRIPT_NAME -d .hidden/src           # Process hidden directory"
+    echo "  $SCRIPT_NAME -D output.txt -de \"***\"   # Use custom delimiter, output to file"
+    echo "  $SCRIPT_NAME -a -c -l                  # Include hidden files, compress, line numbers"
+    echo "  $SCRIPT_NAME --skip node_modules --skip \"*.log\""
+    echo "  $SCRIPT_NAME -C                        # Aggressive compression (all code in one line)"
+    echo ""
+    echo "NOTES:"
+    echo "  - Skip patterns match both files and directories"
+    echo "  - When skipping 'src', both 'src/' dir and 'src.js' file are skipped"
+    echo "  - Compression creates a dense, left-aligned block of text optimized for AI tokens"
+    echo "  - -C flag removes all newlines between statements (aggressive minification)"
+    echo "  - -i/--install is a standalone option and cannot be combined with other options"
+}
+
+print_version() {
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "${BOLD}lscat${NC} version ${GREEN}$VERSION${NC}"
+        echo "Created for efficient file concatenation and AI processing"
+    else
+        echo "lscat version $VERSION"
+        echo "Created for efficient file concatenation and AI processing"
+    fi
+}
+
+print_error() {
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "${RED}Error:${NC} $1" >&2
+    else
+        echo "Error: $1" >&2
+    fi
+}
+
+print_warning() {
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "${YELLOW}Warning:${NC} $1" >&2
+    else
+        echo "Warning: $1" >&2
+    fi
+}
+
+print_info() {
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "${CYAN}Info:${NC} $1"
+    else
+        echo "Info: $1"
+    fi
+}
+
+# Installation function
+install_lscat() {
+    echo "Installing lscat..."
+    echo "====================="
+    
+    # Get the script's own location
+    if [[ -f "$0" ]]; then
+        SCRIPT_PATH="$0"
+    else
+        # Fallback to the current script
+        SCRIPT_PATH="./$(basename "$0")"
+    fi
+    
+    if [[ ! -f "$SCRIPT_PATH" ]]; then
+        print_error "Cannot find lscat script to install"
+        exit 1
+    fi
+    
+    # Make sure the script is executable
+    chmod +x "$SCRIPT_PATH" 2>/dev/null || true
+    
+    echo ""
+    echo "Select installation method:"
+    echo "1) Current user only (~/.local/bin) - Recommended"
+    echo "2) System-wide (/usr/local/bin) - Requires sudo"
+    echo "3) System-wide (/usr/bin) - Requires sudo"
+    echo "4) Custom location with symlink"
+    echo "5) Cancel installation"
+    echo ""
+    
+    read -p "Enter choice [1-5]: " choice
+    
+    case $choice in
+        1)
+            # User installation
+            mkdir -p ~/.local/bin
+            if cp "$SCRIPT_PATH" ~/.local/bin/lscat; then
+                chmod +x ~/.local/bin/lscat
+                echo "Installed to ~/.local/bin/lscat"
+                
+                # Check if PATH needs update
+                if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+                    echo "Adding ~/.local/bin to PATH..."
+                    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+                    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc 2>/dev/null || true
+                    source ~/.bashrc 2>/dev/null || true
+                fi
+            else
+                print_error "Failed to copy to ~/.local/bin/"
+                exit 1
+            fi
+            ;;
+        2)
+            # System installation to /usr/local/bin
+            if sudo cp "$SCRIPT_PATH" /usr/local/bin/lscat; then
+                sudo chmod +x /usr/local/bin/lscat
+                echo "Installed to /usr/local/bin/lscat"
+            else
+                print_error "Failed to install to /usr/local/bin"
+                exit 1
+            fi
+            ;;
+        3)
+            # System installation to /usr/bin
+            if sudo cp "$SCRIPT_PATH" /usr/bin/lscat; then
+                sudo chmod +x /usr/bin/lscat
+                echo "Installed to /usr/bin/lscat"
+            else
+                print_error "Failed to install to /usr/bin"
+                exit 1
+            fi
+            ;;
+        4)
+            # Custom symlink method
+            read -p "Enter installation directory (e.g., /opt/lscat): " install_dir
+            if [[ -z "$install_dir" ]]; then
+                print_error "No directory specified"
+                exit 1
+            fi
+            
+            mkdir -p "$install_dir" 2>/dev/null || sudo mkdir -p "$install_dir"
+            
+            if cp "$SCRIPT_PATH" "$install_dir/lscat"; then
+                chmod +x "$install_dir/lscat"
+                
+                read -p "Create symlink in which directory? (e.g., /usr/local/bin): " symlink_dir
+                if [[ -n "$symlink_dir" ]]; then
+                    sudo ln -sf "$install_dir/lscat" "$symlink_dir/lscat" 2>/dev/null || ln -sf "$install_dir/lscat" "$symlink_dir/lscat"
+                    echo "Installed to $install_dir/lscat with symlink in $symlink_dir"
+                else
+                    echo "Installed to $install_dir/lscat (no symlink created)"
+                fi
+            else
+                print_error "Failed to install to $install_dir"
+                exit 1
+            fi
+            ;;
+        5)
+            echo "Installation cancelled."
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice!"
+            exit 1
+            ;;
+    esac
+    
+    # Verify installation
+    echo ""
+    echo "Verifying installation..."
+    if command -v lscat &> /dev/null; then
+        echo -e "\033[32m✓ lscat installed successfully!\033[0m"
+        echo "Run 'lscat --help' to see usage"
+    else
+        echo -e "\033[31m✗ Installation completed but lscat not found in PATH\033[0m"
+        echo "You may need to log out and back in, or run: source ~/.bashrc"
+    fi
+    
+    exit 0
+}
+
+# Check if pattern should be skipped
+should_skip() {
+    local item="$1"
+    local item_name=$(basename "$item")
+    
+    for pattern in "${SKIP_PATTERNS[@]}"; do
+        # Remove trailing / if present for better matching
+        pattern="${pattern%/}"
+        
+        # Check exact match
+        if [[ "$item" == "$pattern" ]] || [[ "$item_name" == "$pattern" ]]; then
+            return 0
+        fi
+        
+        # Check if pattern matches as a substring in path
+        if [[ "$item" == *"$pattern"* ]]; then
+            return 0
+        fi
+        
+        # Check if pattern is a file extension pattern
+        if [[ "$pattern" == *.* ]] && [[ "$item" == *"$pattern" ]]; then
+            return 0
+        fi
+        
+        # Check for wildcard-like patterns
+        if [[ "$pattern" == *"*"* ]]; then
+            # Convert simple wildcard to regex
+            local regex_pattern="${pattern//\*/.*}"
+            if [[ "$item" =~ $regex_pattern ]] || [[ "$item_name" =~ $regex_pattern ]]; then
+                return 0
+            fi
+        fi
+    done
+    
+    return 1
+}
+
+# Normal compression - remove indentation and blank lines
+compress_content() {
+    local content="$1"
+    
+    if [[ "$COMPRESS" == false ]] && [[ "$COMPRESS_HARD" == false ]]; then
+        echo "$content"
+        return
+    fi
+    
+    # If hard compression is enabled, use that instead
+    if [[ "$COMPRESS_HARD" == true ]]; then
+        compress_hard_content "$content"
+        return
+    fi
+    
+    # Original compression: remove leading/trailing whitespace and empty lines
+    echo "$content" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'
+}
+
+# Hard compression - remove ALL formatting, make each file one continuous line
+compress_hard_content() {
+    local content="$1"
+    
+    # First, remove all trailing/leading whitespace from each line
+    content=$(echo "$content" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    
+    # Remove completely empty lines
+    content=$(echo "$content" | sed -e '/^$/d')
+    
+    # Join lines with a single space, but be careful with certain patterns
+    local result=""
+    local in_multiline_comment=false
+    local in_string=false
+    local string_char=""
+    
+    # FIX: Define regex variables to avoid syntax errors with < > characters in conditionals
+    local regex_open='[\({\[<]'
+    local regex_close='[.,;:!?\)}\]>]'
+    
+    while IFS= read -r line; do
+        # Skip empty lines
+        [[ -z "$line" ]] && continue
+        
+        # Handle multiline comments
+        if [[ "$in_multiline_comment" == true ]]; then
+            if [[ "$line" == *"*/"* ]]; then
+                in_multiline_comment=false
+            fi
+            result="${result}${line} "
+            continue
+        fi
+        
+        # Check if line starts a multiline comment
+        if [[ "$line" == "/*"* ]] && [[ "$line" != *"*/"* ]]; then
+            in_multiline_comment=true
+            result="${result}${line} "
+            continue
+        fi
+        
+        if [[ -n "$result" ]]; then
+            local last_char="${result: -1}"
+            local first_char="${line:0:1}"
+            
+            # Use defined variables for pattern matching
+            if [[ "$last_char" =~ $regex_open ]] || [[ "$first_char" =~ $regex_close ]]; then
+                result="${result}${line} "
+            else
+                result="${result} ${line} "
+            fi
+        else
+            result="${line} "
+        fi
+    done <<< "$content"
+    
+    # Clean up: remove trailing space and collapse multiple spaces
+    result=$(echo "$result" | sed -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
+    
+    if [[ ${#result} -gt 1000 ]] && [[ "$WRITING_TO_FILE" == false ]]; then
+        print_warning "Hard compression created very long line (${#result} chars)"
+    fi
+    
+    echo "$result"
+}
+
+# Get tree-like structure (simplified version)
+get_tree_structure() {
+    local dir="$1"
+    local depth="${2:-0}"
+    local prefix="${3:-}"
+    local recursive="${4:-true}"
+    local parent_is_hidden="${5:-false}"
+    
+    # Skip if directory should be skipped
+    if should_skip "$dir"; then
+        return
+    fi
+    
+    # Check if current directory is hidden (starts with .)
+    local dir_name=$(basename "$dir")
+    local is_current_hidden=false
+    [[ "$dir_name" == .* ]] && is_current_hidden=true
+    
+    # Determine if we should show this directory
+    if [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_current_hidden" == true ]] && [[ "$parent_is_hidden" == false ]]; then
+        return
+    fi
+    
+    # Print current directory
+    if [[ $depth -eq 0 ]]; then
+        if [[ "$WRITING_TO_FILE" == false ]]; then
+            echo -e "${BOLD}${BLUE}📁 $dir${NC}"
+        else
+            echo "📁 $dir"
+        fi
+    else
+        echo "${prefix}📁 $dir_name/"
+    fi
+    
+    # Find items in directory
+    local find_opts="-maxdepth 1 -mindepth 1"
+    if [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_current_hidden" == false ]]; then
+        find_opts="$find_opts -not -name '.*'"
+    fi
+    
+    local find_cmd="find \"$dir\" $find_opts"
+    find_cmd="$find_cmd | sort"
+    
+    local count=0
+    local total_items=0
+    
+    # First, count total items
+    while IFS= read -r item; do
+        [[ -z "$item" ]] && continue
+        total_items=$((total_items + 1))
+    done < <(eval "$find_cmd 2>/dev/null")
+    
+    # Process items
+    while IFS= read -r item; do
+        [[ -z "$item" ]] && continue
+        
+        local item_name=$(basename "$item")
+        local is_item_hidden=false
+        [[ "$item_name" == .* ]] && is_item_hidden=true
+        
+        # Skip if pattern matches
+        if should_skip "$item"; then
+            continue
+        fi
+        
+        # Skip hidden items if INCLUDE_HIDDEN is false
+        if [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_item_hidden" == true ]] && [[ "$is_current_hidden" == false ]]; then
+            continue
+        fi
+        
+        count=$((count + 1))
+        
+        # Determine if last item for pretty tree
+        local next_prefix="$prefix"
+        if [[ $count -eq $total_items ]]; then
+            next_prefix="${prefix}    "
+            echo -n "${prefix}└── "
+        else
+            next_prefix="${prefix}│   "
+            echo -n "${prefix}├── "
+        fi
+        
+        if [[ -d "$item" ]]; then
+            if [[ "$WRITING_TO_FILE" == false ]]; then
+                echo -e "${BLUE}$item_name/${NC}"
+            else
+                echo "$item_name/"
+            fi
+            # Only recurse if recursive flag is true and not skipping
+            if [[ "$recursive" == true ]] && ! should_skip "$item"; then
+                get_tree_structure "$item" $((depth + 1)) "$next_prefix" "$recursive" "$is_current_hidden"
+            fi
+        else
+            # Color code by file extension
+            local ext="${item_name##*.}"
+            if [[ "$WRITING_TO_FILE" == false ]]; then
+                if [[ "$ext" == "$item_name" ]]; then
+                    echo -e "${GREEN}$item_name${NC}"
+                elif [[ "$ext" == "sh" || "$ext" == "bash" ]]; then
+                    echo -e "${MAGENTA}$item_name${NC}"
+                elif [[ "$ext" == "py" ]]; then
+                    echo -e "${YELLOW}$item_name${NC}"
+                elif [[ "$ext" == "js" || "$ext" == "ts" ]]; then
+                    echo -e "${CYAN}$item_name${NC}"
+                elif [[ "$ext" == "md" || "$ext" == "txt" ]]; then
+                    echo -e "${GREEN}$item_name${NC}"
+                else
+                    echo "$item_name"
+                fi
+            else
+                echo "$item_name"
+            fi
+        fi
+    done < <(eval "$find_cmd 2>/dev/null")
+    
+    if [[ $count -eq 0 ]]; then
+        echo "${prefix}    (empty)"
+    fi
+}
+
+# Process file content with options
+process_file_content() {
+    local file="$1"
+    
+    if [[ ! -f "$file" ]] || [[ ! -r "$file" ]]; then
+        print_warning "Cannot read file: $file"
+        return
+    fi
+    
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "\n${BOLD}File: ${CYAN}$file${NC}"
+    else
+        echo -e "\nFile: $file"
+    fi
+    echo "${DELIMITER}"
+    
+    local file_content
+    file_content=$(cat "$file")
+    
+    if [[ "$SHOW_LINE_NUMBERS" == true ]]; then
+        if [[ "$COMPRESS" == true ]] || [[ "$COMPRESS_HARD" == true ]]; then
+            local compressed_content
+            compressed_content=$(compress_content "$file_content")
+            local line_num=1
+            while IFS= read -r line; do
+                printf "%6d  %s\n" "$line_num" "$line"
+                line_num=$((line_num + 1))
+            done <<< "$compressed_content"
+        else
+            cat -n "$file"
+        fi
+    elif [[ "$COMPRESS" == true ]] || [[ "$COMPRESS_HARD" == true ]]; then
+        compress_content "$file_content"
+    else
+        cat "$file"
+    fi
+}
+
+# Process a directory recursively
+process_directory() {
+    local dir="$1"
+    local dir_name=$(basename "$dir")
+    local is_dir_hidden=false
+    [[ "$dir_name" == .* ]] && is_dir_hidden=true
+    
+    if [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_dir_hidden" == true ]] && [[ "$dir" != "." ]] && [[ ! " ${DIRECTORIES[@]} " =~ " $dir " ]]; then
+        return
+    fi
+    
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "\n${BOLD}${MAGENTA}═══════════════════════════════════════════════════${NC}"
+        echo -e "${BOLD}Directory Structure:${NC}"
+        echo -e "${MAGENTA}═══════════════════════════════════════════════════${NC}\n"
+    else
+        echo -e "\n═══════════════════════════════════════════════════"
+        echo "Directory Structure:"
+        echo "═══════════════════════════════════════════════════\n"
+    fi
+    get_tree_structure "$dir" 0 "" true false
+    
+    if [[ "$CURRENT_DIR_ONLY" == true ]] && [[ ${#DIRECTORIES[@]} -eq 1 ]] && [[ "${DIRECTORIES[0]}" == "." ]]; then
+        if [[ "$WRITING_TO_FILE" == false ]]; then
+            echo -e "\n${BOLD}${MAGENTA}═══════════════════════════════════════════════════${NC}"
+            echo -e "${BOLD}File Contents:${NC}"
+            echo -e "${MAGENTA}═══════════════════════════════════════════════════${NC}"
+        else
+            echo -e "\n═══════════════════════════════════════════════════"
+            echo "File Contents:"
+            echo "═══════════════════════════════════════════════════"
+        fi
+        
+        local find_cmd="find \"$dir\" -type f"
+        
+        if [[ "$INCLUDE_HIDDEN" == false ]]; then
+            if [[ "$is_dir_hidden" == true ]]; then
+                find_cmd="$find_cmd -not -name '.*'"
+            else
+                find_cmd="$find_cmd -not -name '.*' -not -path \"$dir/.*/*\""
+            fi
+        fi
+        
+        find_cmd="$find_cmd | sort"
+        local file_count=0
+        while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            if should_skip "$file"; then continue; fi
+            local file_name=$(basename "$file")
+            if [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$file_name" == .* ]]; then continue; fi
+            
+            process_file_content "$file"
+            file_count=$((file_count + 1))
+        done < <(eval "$find_cmd 2>/dev/null")
+        
+        if [[ $file_count -eq 0 ]]; then
+            echo -e "\nNo files found to process in this directory."
+        else
+            echo -e "\nProcessed $file_count files from $dir"
+        fi
+    else
+        local show_file_contents=false
+        if [[ "$INCLUDE_HIDDEN" == true ]] || [[ ${#SKIP_PATTERNS[@]} -gt 0 ]] || [[ ${#OUTPUT_FILES[@]} -gt 0 ]] || [[ "$COMPRESS" == true ]] || [[ "$SHOW_LINE_NUMBERS" == true ]]; then
+            show_file_contents=true
+        fi
+        
+        if [[ ${#VALID_DIRECTORIES[@]} -gt 1 ]] || [[ ${#VALID_FILES[@]} -gt 0 ]]; then
+            show_file_contents=true
+        fi
+        
+        if [[ "$show_file_contents" == true ]]; then
+            if [[ "$WRITING_TO_FILE" == false ]]; then
+                echo -e "\n${BOLD}${MAGENTA}═══════════════════════════════════════════════════${NC}"
+                echo -e "${BOLD}File Contents:${NC}"
+                echo -e "${MAGENTA}═══════════════════════════════════════════════════${NC}"
+            else
+                echo -e "\n═══════════════════════════════════════════════════"
+                echo "File Contents:"
+                echo "═══════════════════════════════════════════════════"
+            fi
+            
+            local find_cmd="find \"$dir\" -type f"
+            if [[ "$INCLUDE_HIDDEN" == false ]]; then
+                if [[ "$is_dir_hidden" == true ]]; then
+                    find_cmd="$find_cmd -not -name '.*'"
+                else
+                    find_cmd="$find_cmd -not -name '.*' -not -path \"$dir/.*/*\""
+                fi
+            fi
+            find_cmd="$find_cmd | sort"
+            local file_count=0
+            while IFS= read -r file; do
+                [[ -z "$file" ]] && continue
+                if should_skip "$file"; then continue; fi
+                local file_name=$(basename "$file")
+                if [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$file_name" == .* ]]; then continue; fi
+                process_file_content "$file"
+                file_count=$((file_count + 1))
+            done < <(eval "$find_cmd 2>/dev/null")
+            
+            if [[ $file_count -eq 0 ]]; then
+                echo -e "\nNo files found to process in this directory."
+            else
+                echo -e "\nProcessed $file_count files from $dir"
+            fi
+        fi
+    fi
+}
+
+# Process single file
+process_single_file() {
+    local file="$1"
+    if should_skip "$file"; then
+        print_warning "Skipping file: $file"
+        return
+    fi
+    print_info "Processing single file: $file"
+    if [[ "$WRITING_TO_FILE" == false ]]; then
+        echo -e "${BOLD}File: ${CYAN}$file${NC}"
+    else
+        echo "File: $file"
+    fi
+    echo "${DELIMITER}"
+    local file_content=$(cat "$file")
+    if [[ "$SHOW_LINE_NUMBERS" == true ]]; then
+        if [[ "$COMPRESS" == true ]] || [[ "$COMPRESS_HARD" == true ]]; then
+            local compressed_content=$(compress_content "$file_content")
+            local line_num=1
+            while IFS= read -r line; do
+                printf "%6d  %s\n" "$line_num" "$line"
+                line_num=$((line_num + 1))
+            done <<< "$compressed_content"
+        else
+            cat -n "$file"
+        fi
+    elif [[ "$COMPRESS" == true ]] || [[ "$COMPRESS_HARD" == true ]]; then
+        compress_content "$file_content"
+    else
+        cat "$file"
+    fi
+}
+
+# Expand wildcards in directory list
+expand_wildcards() {
+    local expanded_dirs=()
+    for dir in "${DIRECTORIES[@]}"; do
+        if [[ "$dir" == "*" ]]; then
+            expanded_dirs+=(".")
+        elif [[ "$dir" == *"*"* ]]; then
+            for expanded in $dir; do
+                if [[ -e "$expanded" ]]; then
+                    expanded_dirs+=("$expanded")
+                fi
+            done
+        else
+            expanded_dirs+=("$dir")
+        fi
+    done
+    DIRECTORIES=("${expanded_dirs[@]}")
+}
+
+# =============================================================================
+# Main Argument Parsing
+# =============================================================================
+
+if [[ $# -eq 1 ]] && ([[ "$1" == "-i" ]] || [[ "$1" == "--install" ]]); then
+    install_lscat
+fi
+
+if [[ $# -eq 0 ]]; then
+    get_tree_structure "." 0 "" false
+    exit 0
+fi
+
+for arg in "$@"; do
+    if [[ "$arg" == "-i" ]] || [[ "$arg" == "--install" ]]; then
+        print_error "Install option (-i/--install) cannot be combined with other options"
+        exit 1
+    fi
+done
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help) print_help; exit 0 ;;
+        -v|--version) print_version; exit 0 ;;
+        -d|--dir) shift; while [[ $# -gt 0 ]] && [[ ! "$1" =~ ^- ]]; do DIRECTORIES+=("$1"); shift; done; continue ;;
+        -s|--skip) shift; while [[ $# -gt 0 ]] && [[ ! "$1" =~ ^- ]]; do SKIP_PATTERNS+=("$1"); shift; done; continue ;;
+        -a|--all) INCLUDE_HIDDEN=true ;;
+        -D|--destination) shift; while [[ $# -gt 0 ]] && [[ ! "$1" =~ ^- ]]; do OUTPUT_FILES+=("$1"); shift; done; continue ;;
+        -de|--delimiter) shift; if [[ -n "$1" ]] && [[ ! "$1" =~ ^- ]]; then DELIMITER="$1"; shift; else print_error "Delimiter requires a value"; exit 1; fi ;;
+        -c|--compress) COMPRESS=true ;;
+        -C|--compress-hard) COMPRESS_HARD=true; COMPRESS=true ;;
+        -l|--line-numbers) SHOW_LINE_NUMBERS=true ;;
+        -i|--install) print_error "Install option (-i/--install) cannot be combined with other options"; exit 1 ;;
+        -*) print_error "Unknown option: $1"; exit 1 ;;
+        *) DIRECTORIES+=("$1") ;;
+    esac
+    shift
+done
+
+expand_wildcards
+
+if [[ ${#DIRECTORIES[@]} -eq 0 ]]; then
+    DIRECTORIES=(".")
+    CURRENT_DIR_ONLY=true
+fi
+
+VALID_DIRECTORIES=()
+VALID_FILES=()
+for dir in "${DIRECTORIES[@]}"; do
+    if [[ -d "$dir" ]]; then
+        VALID_DIRECTORIES+=("$dir")
+    elif [[ -f "$dir" ]]; then
+        VALID_FILES+=("$dir")
+    else
+        print_error "Directory/file not found: $dir"
+    fi
+done
+
+if [[ ${#OUTPUT_FILES[@]} -gt 0 ]]; then
+    WRITING_TO_FILE=true
+    for output_file in "${OUTPUT_FILES[@]}"; do
+        print_info "Output will be saved to: $output_file"
+        > "$output_file"
+        for dir in "${VALID_DIRECTORIES[@]}"; do process_directory "$dir" >> "$output_file"; done
+        for file in "${VALID_FILES[@]}"; do process_single_file "$file" >> "$output_file"; done
+    done
+    print_info "Output saved to specified file(s)"
+else
+    for dir in "${VALID_DIRECTORIES[@]}"; do process_directory "$dir"; done
+    for file in "${VALID_FILES[@]}"; do process_single_file "$file"; done
+fi
+
+exit 0
