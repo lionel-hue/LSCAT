@@ -1,0 +1,9 @@
+# .gitignore
+*.log
+*.tmp
+output*.txt
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
