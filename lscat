@@ -2,12 +2,12 @@
 
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
-# Version: 1.3.3 (Fixed shell globbing issues)
+# Version: 1.4.0 (Added -f flag for files, improved pattern handling)
 # License: MIT - See LICENSE file for details
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
-VERSION="1.3.3"
+VERSION="1.4.0"
 SCRIPT_NAME=$(basename "$0")
 
 # Default values
@@ -19,6 +19,7 @@ SHOW_LINE_NUMBERS=false
 OUTPUT_FILES=()
 SKIP_PATTERNS=()
 DIRECTORIES=()
+FILES=()
 CURRENT_DIR_ONLY=false
 NON_RECURSIVE=false
 POSITIONAL_DIRECTORIES=false  # Flag to track if dirs were positional
@@ -51,15 +52,20 @@ print_help() {
     echo "  file processing."
     echo ""
     echo "USAGE:"
-    echo "  $SCRIPT_NAME [OPTIONS] [DIRECTORIES...]"
+    echo "  $SCRIPT_NAME [OPTIONS]"
     echo ""
-    echo "  If no directories specified, shows non-recursive listing of current directory"
-    echo "  Use '.' for recursive listing of current directory"
+    echo "  Files and directories must be specified with -f or -d flags"
     echo ""
     echo "OPTIONS:"
-    echo "  -d, --dir DIR1 [DIR2...]   Directories to process (positional also works)"
-    echo "                             Supports patterns: *, *.md, server/database/migration*/"
-    echo "                             Note: Use quotes for patterns: -d \"*\" or -d '*.md'"
+    echo "  -d, --dir DIR1 [DIR2...]   Directories to process recursively"
+    echo "                             -d * : All non-hidden directories recursively"
+    echo "                             -d . : Current directory only (non-recursive)"
+    echo "                             Supports patterns: *, .*, migration*/"
+    echo "  -f, --file FILE1 [FILE2...] Files to process (non-recursive only)"
+    echo "                             -f * : All non-hidden files in current directory"
+    echo "                             -f .* : All hidden files in current directory"
+    echo "                             Supports patterns: *.md, *.js, etc."
+    echo "                             Can specify full paths: -f client/src/app.js"
     echo "  -s, --skip PATTERN         Skip files/dirs matching pattern (can use multiple)"
     echo "  -a, --all                  Include hidden files and directories"
     echo "  -D, --destination FILE     Output file(s) (creates if doesn't exist)"
@@ -73,35 +79,36 @@ print_help() {
     echo ""
     echo "BEHAVIOR:"
     echo "  lscat                      # Non-recursive tree of current dir (shows hidden)"
-    echo "  lscat .                    # Same as above"
-    echo "  lscat -d .                 # Non-recursive, hides hidden files (use -a to show)"
-    echo "  lscat -d \"*\"               # Recursive, hides hidden files (use -a to show)"
+    echo "  lscat -d .                 # Same as above (explicit)"
+    echo "  lscat -d *                 # All directories recursively"
+    echo "  lscat -f *                 # All files in current directory (non-recursive)"
     echo ""
     echo "PATTERN EXAMPLES:"
-    echo "  lscat -d \"*\"              # All non-hidden items recursively"
-    echo "  lscat -d \"*\" -a           # All items (including hidden) recursively"
+    echo "  lscat -d \"*\"              # All non-hidden directories recursively"
+    echo "  lscat -d \"*\" -a           # All directories (including hidden) recursively"
     echo "  lscat -d . -a              # Current directory only (including hidden)"
-    echo "  lscat -d '*.md'            # All .md files in current directory"
-    echo "  lscat -d \".*\"             # All hidden items in current directory"
-    echo "  lscat -d 'src/*.js'        # All .js files in src directory"
+    echo "  lscat -f '*.md'            # All .md files in current directory"
+    echo "  lscat -f \".*\"             # All hidden files in current directory"
+    echo "  lscat -f 'client/src/*.js' # All .js files in client/src"
     echo "  lscat -d 'server/database/migration*/'  # All migration directories"
     echo "  lscat -s '*.log'           # Skip all .log files"
     echo "  lscat -s .git -s node_modules   # Skip .git and node_modules directories"
     echo ""
     echo "EXAMPLES:"
     echo "  $SCRIPT_NAME                           # Non-recursive list of current directory"
-    echo "  $SCRIPT_NAME .                         # Same as above"
     echo "  $SCRIPT_NAME -d \"*\" -a -s .*         # All non-hidden recursively (skip hidden)"
     echo "  $SCRIPT_NAME -D output.txt -de \"***\"   # Use custom delimiter, output to file"
     echo "  $SCRIPT_NAME -a -c -l                  # Include hidden files, compress, line numbers"
+    echo "  $SCRIPT_NAME -f *.md -d client server  # Process .md files and client/server directories"
+    echo "  $SCRIPT_NAME -f .gitignore readme.md -d src  # Mix specific files and directories"
     echo ""
     echo "NOTES:"
     echo "  - Use quotes around patterns to prevent shell expansion"
     echo "  - Skip patterns match both files and directories"
     echo "  - When skipping 'src', both 'src/' dir and 'src.js' file are skipped"
-    echo "  - Default (no -d flag): non-recursive, shows hidden"
-    echo "  - -d .: non-recursive, hides hidden (unless -a used)"
-    echo "  - -d \"*\": recursive, hides hidden (unless -a used)"
+    echo "  - -d flag is for directories only (recursive with *)"
+    echo "  - -f flag is for files only (non-recursive, current directory only)"
+    echo "  - Default (no flags): non-recursive tree of current dir, shows hidden"
 }
 
 print_version() {
@@ -259,42 +266,48 @@ install_lscat() {
     exit 0
 }
 
-# Enhanced pattern expansion function
+# Enhanced pattern expansion function (DIRECTORIES ONLY - recursive)
 expand_patterns() {
     local items=("$@")
     local expanded_items=()
     
     for item in "${items[@]}"; do
         # Debug: show what we're processing
-        # echo "DEBUG: Processing item: '$item'" >&2
+        # echo "DEBUG: Processing directory pattern: '$item'" >&2
         
         # Special cases
         if [[ "$item" == "*" ]]; then
-            # * means all non-hidden items in current directory, recursive by default
+            # * means all non-hidden directories recursively
             if [[ "$INCLUDE_HIDDEN" == true ]]; then
-                # Include hidden items
+                # Include hidden directories
                 while IFS= read -r -d $'\0' found_item; do
-                    expanded_items+=("$found_item")
-                done < <(find . -mindepth 1 -print0 2>/dev/null)
+                    if [[ -d "$found_item" ]]; then
+                        expanded_items+=("$found_item")
+                    fi
+                done < <(find . -mindepth 1 -type d -print0 2>/dev/null)
             else
-                # Exclude hidden items
+                # Exclude hidden directories
                 while IFS= read -r -d $'\0' found_item; do
-                    expanded_items+=("$found_item")
-                done < <(find . -mindepth 1 -not -name '.*' -print0 2>/dev/null)
+                    if [[ -d "$found_item" ]] && [[ ! "$found_item" =~ /\. ]]; then
+                        expanded_items+=("$found_item")
+                    fi
+                done < <(find . -mindepth 1 -type d -not -name '.*' -print0 2>/dev/null)
             fi
         elif [[ "$item" == "." ]] && [[ "$POSITIONAL_DIRECTORIES" == false ]]; then
-            # . with -d flag means current directory only (non-recursive), hide hidden unless -a
+            # . with -d flag means current directory only (non-recursive)
             expanded_items+=(".")
         elif [[ "$item" == ".*" ]]; then
-            # .* means hidden items in current directory
+            # .* means hidden directories recursively
             while IFS= read -r -d $'\0' found_item; do
-                expanded_items+=("$found_item")
-            done < <(find . -maxdepth 1 -mindepth 1 -name '.*' -print0 2>/dev/null)
+                if [[ -d "$found_item" ]]; then
+                    expanded_items+=("$found_item")
+                fi
+            done < <(find . -mindepth 1 -type d -name '.*' -print0 2>/dev/null)
         elif [[ "$item" == *"*"* ]] || [[ "$item" == *"?"* ]] || [[ "$item" == *"["* ]]; then
-            # Contains wildcard pattern - we need to handle this carefully
-            # First, check if it's a literal file/directory that exists
-            if [[ -e "$item" ]]; then
-                # It exists as a literal file/directory
+            # Contains wildcard pattern - directories only
+            # First, check if it's a literal directory that exists
+            if [[ -d "$item" ]]; then
+                # It exists as a literal directory
                 expanded_items+=("$item")
             else
                 # Try to expand with shell globbing (with nullglob to avoid literal pattern)
@@ -305,13 +318,17 @@ expand_patterns() {
                 if [[ "$item" != */* ]] && [[ "$item" != ./* ]]; then
                     # Pattern without path - try in current directory
                     for found_item in ./$item; do
-                        found_items+=("$found_item")
+                        if [[ -d "$found_item" ]]; then
+                            found_items+=("$found_item")
+                        fi
                     done
                 fi
                 
                 # Try the pattern as-is
                 for found_item in $item; do
-                    found_items+=("$found_item")
+                    if [[ -d "$found_item" ]]; then
+                        found_items+=("$found_item")
+                    fi
                 done
                 shopt -u nullglob
                 
@@ -330,11 +347,13 @@ expand_patterns() {
                             fi
                         done < <(find "$pattern_dir" -type d -name "$pattern_name" -print0 2>/dev/null)
                     else
-                        # General pattern
+                        # General pattern (directories only)
                         while IFS= read -r -d $'\0' found_item; do
-                            found_items+=("$found_item")
-                        done < <(find "$pattern_dir" -type f -name "$pattern_name" -print0 2>/dev/null)
-                    done
+                            if [[ -d "$found_item" ]]; then
+                                found_items+=("$found_item")
+                            fi
+                        done < <(find "$pattern_dir" -type d -name "$pattern_name" -print0 2>/dev/null)
+                    fi
                 fi
                 
                 # Add found items
@@ -343,8 +362,97 @@ expand_patterns() {
                 done
             fi
         else
-            # No pattern, use as-is
-            expanded_items+=("$item")
+            # No pattern, check if it's a directory
+            if [[ -d "$item" ]]; then
+                expanded_items+=("$item")
+            elif [[ -e "$item" ]]; then
+                print_warning "Skipping non-directory item in -d flag: $item"
+            else
+                print_error "Directory not found: $item"
+                return 1
+            fi
+        fi
+    done
+    
+    # Remove duplicates and empty entries
+    local unique_items=()
+    for item in "${expanded_items[@]}"; do
+        if [[ -n "$item" ]] && [[ ! " ${unique_items[@]} " =~ " $item " ]]; then
+            unique_items+=("$item")
+        fi
+    done
+    
+    # Output each item on a new line
+    for item in "${unique_items[@]}"; do
+        echo "$item"
+    done
+}
+
+# Enhanced file pattern expansion function (FILES ONLY - non-recursive)
+expand_file_patterns() {
+    local items=("$@")
+    local expanded_items=()
+    
+    for item in "${items[@]}"; do
+        # Debug: show what we're processing
+        # echo "DEBUG: Processing file pattern: '$item'" >&2
+        
+        # Special cases
+        if [[ "$item" == "*" ]]; then
+            # * means all non-hidden files in current directory (non-recursive)
+            if [[ "$INCLUDE_HIDDEN" == true ]]; then
+                # Include hidden files
+                while IFS= read -r -d $'\0' found_item; do
+                    if [[ -f "$found_item" ]]; then
+                        expanded_items+=("$found_item")
+                    fi
+                done < <(find . -maxdepth 1 -mindepth 1 -type f -print0 2>/dev/null)
+            else
+                # Exclude hidden files
+                while IFS= read -r -d $'\0' found_item; do
+                    if [[ -f "$found_item" ]]; then
+                        expanded_items+=("$found_item")
+                    fi
+                done < <(find . -maxdepth 1 -mindepth 1 -type f -not -name '.*' -print0 2>/dev/null)
+            fi
+        elif [[ "$item" == ".*" ]]; then
+            # .* means hidden files in current directory
+            while IFS= read -r -d $'\0' found_item; do
+                if [[ -f "$found_item" ]]; then
+                    expanded_items+=("$found_item")
+                fi
+            done < <(find . -maxdepth 1 -mindepth 1 -type f -name '.*' -print0 2>/dev/null)
+        elif [[ "$item" == *"*"* ]] || [[ "$item" == *"?"* ]] || [[ "$item" == *"["* ]]; then
+            # Contains wildcard pattern - files only, non-recursive
+            local pattern_name=$(basename "$item")
+            local pattern_dir=$(dirname "$item")
+            [[ "$pattern_dir" == "." ]] && pattern_dir="."
+            
+            if [[ -d "$pattern_dir" ]] || [[ "$pattern_dir" == "" ]]; then
+                # Use find with maxdepth 1 for non-recursive search
+                if [[ "$INCLUDE_HIDDEN" == true ]]; then
+                    while IFS= read -r -d $'\0' found_item; do
+                        if [[ -f "$found_item" ]]; then
+                            expanded_items+=("$found_item")
+                        fi
+                    done < <(find "$pattern_dir" -maxdepth 1 -type f -name "$pattern_name" -print0 2>/dev/null)
+                else
+                    while IFS= read -r -d $'\0' found_item; do
+                        if [[ -f "$found_item" ]] && [[ ! "$(basename "$found_item")" == .* ]]; then
+                            expanded_items+=("$found_item")
+                        fi
+                    done < <(find "$pattern_dir" -maxdepth 1 -type f -name "$pattern_name" -not -name '.*' -print0 2>/dev/null)
+                fi
+            fi
+        else
+            # No pattern, check if it's a file
+            if [[ -f "$item" ]]; then
+                expanded_items+=("$item")
+            elif [[ -e "$item" ]]; then
+                print_warning "Skipping non-file item in -f flag: $item"
+            else
+                print_warning "File not found: $item"
+            fi
         fi
     done
     
@@ -820,6 +928,15 @@ while [[ $# -gt 0 ]]; do
             done
             continue 
             ;;
+        -f|--file) 
+            shift
+            # Collect all non-option arguments
+            while [[ $# -gt 0 ]] && [[ ! "$1" =~ ^- ]]; do 
+                FILES+=("$1")
+                shift
+            done
+            continue 
+            ;;
         -s|--skip) 
             shift
             # Collect all non-option arguments
@@ -855,22 +972,24 @@ while [[ $# -gt 0 ]]; do
         -i|--install) print_error "Install option (-i/--install) cannot be combined with other options"; exit 1 ;;
         -*) print_error "Unknown option: $1"; exit 1 ;;
         *) 
-            # Positional argument (directory)
-            DIRECTORIES+=("$1")
-            POSITIONAL_DIRECTORIES=true
+            # Positional arguments are no longer supported
+            print_error "Positional arguments are not supported. Use -d for directories or -f for files."
+            print_error "Example: lscat -d .    or    lscat -f *.md"
+            exit 1
             ;;
     esac
     shift
 done
 
 # Handle default case (no arguments)
-if [[ ${#DIRECTORIES[@]} -eq 0 ]]; then
+if [[ ${#DIRECTORIES[@]} -eq 0 ]] && [[ ${#FILES[@]} -eq 0 ]]; then
     DIRECTORIES=(".")
     POSITIONAL_DIRECTORIES=true
 fi
 
 # Debug: show what we received
 # echo "DEBUG: Raw DIRECTORIES: ${DIRECTORIES[@]}" >&2
+# echo "DEBUG: Raw FILES: ${FILES[@]}" >&2
 # echo "DEBUG: Raw SKIP_PATTERNS: ${SKIP_PATTERNS[@]}" >&2
 
 # Expand patterns in all arrays that support them
@@ -887,6 +1006,21 @@ if [[ ${#DIRECTORIES[@]} -gt 0 ]]; then
     done
     # Update DIRECTORIES with expanded items
     DIRECTORIES=("${temp_dirs[@]}")
+fi
+
+if [[ ${#FILES[@]} -gt 0 ]]; then
+    # Create temporary array for expanded files
+    local temp_files=()
+    for file in "${FILES[@]}"; do
+        # Use mapfile to handle multi-line output from expand_file_patterns
+        while IFS= read -r expanded_item; do
+            if [[ -n "$expanded_item" ]]; then
+                temp_files+=("$expanded_item")
+            fi
+        done < <(expand_file_patterns "$file")
+    done
+    # Update FILES with expanded items
+    FILES=("${temp_files[@]}")
 fi
 
 if [[ ${#SKIP_PATTERNS[@]} -gt 0 ]]; then
@@ -906,6 +1040,7 @@ fi
 
 # Debug: show what we expanded to
 # echo "DEBUG: Expanded DIRECTORIES: ${DIRECTORIES[@]}" >&2
+# echo "DEBUG: Expanded FILES: ${FILES[@]}" >&2
 # echo "DEBUG: Expanded SKIP_PATTERNS: ${SKIP_PATTERNS[@]}" >&2
 
 # Set flags based on the directory specification
@@ -925,16 +1060,29 @@ fi
 VALID_DIRECTORIES=()
 VALID_FILES=()
 
+# Validate directories
 for dir in "${DIRECTORIES[@]}"; do
     if [[ -d "$dir" ]]; then
         VALID_DIRECTORIES+=("$dir")
     elif [[ -f "$dir" ]]; then
-        VALID_FILES+=("$dir")
+        print_warning "Directory expected but found file in -d flag: $dir (use -f for files)"
     else
-        print_error "Directory/file not found: $dir"
+        print_error "Directory not found: $dir"
     fi
 done
 
+# Validate files
+for file in "${FILES[@]}"; do
+    if [[ -f "$file" ]]; then
+        VALID_FILES+=("$file")
+    elif [[ -d "$file" ]]; then
+        print_warning "File expected but found directory in -f flag: $file (use -d for directories)"
+    else
+        print_warning "File not found: $file (skipping)"
+    fi
+done
+
+# Process output
 if [[ ${#OUTPUT_FILES[@]} -gt 0 ]]; then
     WRITING_TO_FILE=true
     for output_file in "${OUTPUT_FILES[@]}"; do
@@ -949,7 +1097,9 @@ if [[ ${#OUTPUT_FILES[@]} -gt 0 ]]; then
                 process_directory "$dir" false >> "$output_file"
             fi
         done
-        for file in "${VALID_FILES[@]}"; do process_single_file "$file" >> "$output_file"; done
+        for file in "${VALID_FILES[@]}"; do 
+            process_single_file "$file" >> "$output_file"
+        done
     done
     print_info "Output saved to specified file(s)"
 else
@@ -962,7 +1112,7 @@ else
             process_directory "$dir" false
         fi
     done
-    for file in "${VALID_FILES[@]}"; do process_single_file "$file"; done
+    for file in "${VALID_FILES[@]}"; do 
+        process_single_file "$file"
+    done
 fi
-
-exit 0
