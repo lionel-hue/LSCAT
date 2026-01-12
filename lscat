@@ -2,12 +2,12 @@
 
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
-# Version: 1.4.0 (Added -f flag for files, improved pattern handling)
+# Version: 1.4.1 (Fixed skip pattern handling)
 # License: MIT - See LICENSE file for details
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
-VERSION="1.4.0"
+VERSION="1.4.1"
 SCRIPT_NAME=$(basename "$0")
 
 # Default values
@@ -67,6 +67,8 @@ print_help() {
     echo "                             Supports patterns: *.md, *.js, etc."
     echo "                             Can specify full paths: -f client/src/app.js"
     echo "  -s, --skip PATTERN         Skip files/dirs matching pattern (can use multiple)"
+    echo "                             Patterns match at any directory level"
+    echo "                             Example: -s node_modules skips ALL node_modules dirs"
     echo "  -a, --all                  Include hidden files and directories"
     echo "  -D, --destination FILE     Output file(s) (creates if doesn't exist)"
     echo "  -de, --delimiter CHAR      Delimiter between file contents (default: \"---\")"
@@ -93,6 +95,7 @@ print_help() {
     echo "  lscat -d 'server/database/migration*/'  # All migration directories"
     echo "  lscat -s '*.log'           # Skip all .log files"
     echo "  lscat -s .git -s node_modules   # Skip .git and node_modules directories"
+    echo "  lscat -s ./client/node_modules/ # Skip specific directory path"
     echo ""
     echo "EXAMPLES:"
     echo "  $SCRIPT_NAME                           # Non-recursive list of current directory"
@@ -104,8 +107,8 @@ print_help() {
     echo ""
     echo "NOTES:"
     echo "  - Use quotes around patterns to prevent shell expansion"
-    echo "  - Skip patterns match both files and directories"
-    echo "  - When skipping 'src', both 'src/' dir and 'src.js' file are skipped"
+    echo "  - Skip patterns prevent BOTH tree display AND file processing"
+    echo "  - Skip patterns match at any depth (e.g., -s node_modules skips all node_modules)"
     echo "  - -d flag is for directories only (recursive with *)"
     echo "  - -f flag is for files only (non-recursive, current directory only)"
     echo "  - Default (no flags): non-recursive tree of current dir, shows hidden"
@@ -272,9 +275,6 @@ expand_patterns() {
     local expanded_items=()
     
     for item in "${items[@]}"; do
-        # Debug: show what we're processing
-        # echo "DEBUG: Processing directory pattern: '$item'" >&2
-        
         # Special cases
         if [[ "$item" == "*" ]]; then
             # * means all non-hidden directories recursively
@@ -394,9 +394,6 @@ expand_file_patterns() {
     local expanded_items=()
     
     for item in "${items[@]}"; do
-        # Debug: show what we're processing
-        # echo "DEBUG: Processing file pattern: '$item'" >&2
-        
         # Special cases
         if [[ "$item" == "*" ]]; then
             # * means all non-hidden files in current directory (non-recursive)
@@ -470,59 +467,63 @@ expand_file_patterns() {
     done
 }
 
-# Enhanced should_skip with pattern support
+# Enhanced should_skip with better directory handling
 should_skip() {
     local item="$1"
     local item_name=$(basename "$item")
     
     for pattern in "${SKIP_PATTERNS[@]}"; do
-        # Remove trailing / if present for better matching
+        # Remove trailing / if present
         pattern="${pattern%/}"
         
-        # Check exact match
+        # Skip empty patterns
+        [[ -z "$pattern" ]] && continue
+        
+        # 1. Check exact match
         if [[ "$item" == "$pattern" ]] || [[ "$item_name" == "$pattern" ]]; then
             return 0
         fi
         
-        # Check if pattern is a file extension pattern (like *.md)
-        if [[ "$pattern" == *.* ]] && [[ "$pattern" == *"*"* ]]; then
-            # Convert simple wildcard to regex
-            local regex_pattern="${pattern//\*/.*}"
-            regex_pattern="${regex_pattern//\./\\.}"
-            if [[ "$item_name" =~ $regex_pattern ]] || [[ "$item" =~ $regex_pattern ]]; then
-                return 0
-            fi
-        fi
-        
-        # Check if pattern contains wildcards
+        # 2. Check if pattern contains wildcards
         if [[ "$pattern" == *"*"* ]] || [[ "$pattern" == *"?"* ]] || [[ "$pattern" == *"["* ]]; then
-            # Use fnmatch for pattern matching
-            if [[ "$item_name" == $pattern ]] || [[ "$item" == $pattern ]]; then
+            # Use case pattern matching
+            case "$item" in
+                $pattern)
+                    return 0
+                    ;;
+            esac
+            case "$item_name" in
+                $pattern)
+                    return 0
+                    ;;
+            esac
+        fi
+        
+        # 3. Check for directory path matching (e.g., ./client/node_modules)
+        # Remove leading ./ if present for better matching
+        local clean_pattern="${pattern#./}"
+        local clean_item="${item#./}"
+        
+        if [[ "$clean_item" == "$clean_pattern"* ]]; then
+            # If pattern ends with a directory name and item is under that directory
+            return 0
+        fi
+        
+        # 4. Check if item is inside a skipped directory
+        # For each segment of the item path, check if it matches a skip pattern
+        local temp_path="$clean_item"
+        while [[ "$temp_path" != "." ]] && [[ "$temp_path" != "" ]]; do
+            local current_dir="$(basename "$temp_path")"
+            if [[ "$current_dir" == "$clean_pattern" ]] || 
+               [[ "$current_dir" == "$pattern" ]] || 
+               ([[ "$pattern" == *"*"* ]] && case "$current_dir" in $pattern) true;; *) false;; esac); then
                 return 0
             fi
-            
-            # Try with find pattern matching
-            local pattern_dir=$(dirname "$pattern")
-            local pattern_name=$(basename "$pattern")
-            [[ "$pattern_dir" == "." ]] && pattern_dir=""
-            
-            if [[ -z "$pattern_dir" ]] || [[ "$item" == *"$pattern_dir"* ]]; then
-                # Use shell pattern matching
-                case "$item_name" in
-                    $pattern_name) return 0 ;;
-                esac
+            temp_path="$(dirname "$temp_path")"
+            if [[ "$temp_path" == "/" ]] || [[ "$temp_path" == "." ]]; then
+                break
             fi
-        fi
-        
-        # Check if item is inside a directory pattern
-        if [[ -d "$pattern" ]] && [[ "$item" == "$pattern"/* ]]; then
-            return 0
-        fi
-        
-        # Check substring match for directory names
-        if [[ "$item" == *"$pattern"* ]]; then
-            return 0
-        fi
+        done
     done
     
     return 1
@@ -612,7 +613,7 @@ compress_hard_content() {
     echo "$result"
 }
 
-# Enhanced get_tree_structure with NON_RECURSIVE support
+# Enhanced get_tree_structure with proper skip handling
 get_tree_structure() {
     local dir="$1"
     local depth="${2:-0}"
@@ -626,8 +627,17 @@ get_tree_structure() {
         recursive=false
     fi
     
-    # Skip if directory should be skipped
+    # Skip entire directory if it matches skip patterns
     if should_skip "$dir"; then
+        if [[ $depth -eq 0 ]]; then
+            if [[ "$WRITING_TO_FILE" == false ]]; then
+                echo -e "${YELLOW}📁 $dir (skipped)${NC}"
+            else
+                echo "📁 $dir (skipped)"
+            fi
+        else
+            echo "${prefix}📁 $(basename "$dir")/ (skipped)"
+        fi
         return
     fi
     
@@ -791,6 +801,12 @@ process_directory() {
     local is_dir_hidden=false
     [[ "$dir_name" == .* ]] && is_dir_hidden=true
     local force_show_hidden="${2:-false}"
+    
+    # Skip entire directory if it matches skip patterns
+    if should_skip "$dir"; then
+        print_info "Skipping entire directory: $dir"
+        return
+    fi
     
     if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_dir_hidden" == true ]] && [[ "$dir" != "." ]] && [[ ! " ${DIRECTORIES[@]} " =~ " $dir " ]]; then
         return
