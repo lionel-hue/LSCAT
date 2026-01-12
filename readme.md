@@ -2,20 +2,20 @@
 
 `lscat` is a powerful command-line utility that combines directory listing with file concatenation capabilities, designed for AI analysis, documentation generation, and bulk file processing.
 
-![Version](https://img.shields.io/badge/version-1.3.1-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![Shell](https://img.shields.io/badge/shell-bash-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
 
 - **Beautiful tree structure** display with color-coded file types
-- **Pattern matching** for directories and skip patterns (`*.md`, `.*`, `migration*/`)
-- **Flexible recursion control** - different behaviors for `lscat`, `lscat .`, `lscat -d .`, `lscat -d *`
+- **Pattern matching** for directories (`-d`) and files (`-f`) with separate controls
+- **Flexible recursion control** - `-d` for recursive directory traversal, `-f` for non-recursive file selection
 - **Content concatenation** with customizable delimiters
 - **Compression options** for AI token optimization
 - **Hidden file control** with granular visibility options
 - **Output to file** with automatic color disabling
-- **Pattern-based skipping** for excluding files/directories
+- **Advanced skip patterns** for precise file/directory exclusion
 - **Line numbering** for code analysis
 - **Easy installation** with system-wide setup option
 
@@ -43,38 +43,41 @@ Choose from these installation methods:
 # Show beautiful tree of current directory (non-recursive, shows hidden)
 lscat
 
-# Same as above (positional directory)
-lscat .
-
-# Recursive listing with file contents
+# Process directories recursively
 lscat -d *
 
-# Process specific directory
-lscat -d src
+# Process files in current directory only
+lscat -f *
 
-# Process multiple directories
-lscat -d src lib tests
+# Process specific directories
+lscat -d client server
+
+# Process specific files
+lscat -f .gitignore README.md package.json
+
+# Mix files and directories
+lscat -f *.md -d src tests
 ```
 
 ### Pattern Examples
 ```bash
-# All non-hidden items recursively
+# All non-hidden directories recursively
 lscat -d *
 
-# All items (including hidden) recursively
+# All directories (including hidden) recursively
 lscat -d * -a
 
 # Current directory only (including hidden)
 lscat -d . -a
 
 # All .md files in current directory
-lscat -d *.md
+lscat -f *.md
 
-# All hidden items in current directory
-lscat -d .*
+# All hidden files in current directory
+lscat -f .*
 
 # All .js files in src directory
-lscat -d src/*.js
+lscat -f src/*.js
 
 # All migration directories
 lscat -d server/database/migration*/
@@ -89,24 +92,28 @@ lscat -D output.txt -de "***"
 lscat -a -c -l
 
 # Skip specific patterns
-lscat -s *.log -s .git -s node_modules
+lscat -s *.log -s node_modules -s .git
 
 # All non-hidden recursively (skip hidden)
 lscat -d * -a -s .*
 
 # Aggressive compression (all code in one line)
 lscat -C
+
+# Process project for AI analysis
+lscat -f *.md *.json -d src -s node_modules -s *.log -c -D ai_input.txt
 ```
 
 ## 📋 Options
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--dir` | `-d` | Directories to process (supports patterns) |
-| `--skip` | `-s` | Skip files/dirs matching pattern |
+| `--dir` | `-d` | Directories to process (supports patterns, recursive) |
+| `--file` | `-f` | Files to process (supports patterns, non-recursive) |
+| `--skip` | `-s` | Skip files/dirs matching pattern (supports wildcards) |
 | `--all` | `-a` | Include hidden files and directories |
 | `--destination` | `-D` | Output file(s) |
-| `--delimiter` | `-de` | Delimiter between file contents |
+| `--delimiter` | `-de` | Delimiter between file contents (default: "---") |
 | `--compress` | `-c` | Remove indentation and blank lines |
 | `--compress-hard` | `-C` | Aggressive compression (one-line per file) |
 | `--line-numbers` | `-l` | Show line numbers in file contents |
@@ -116,46 +123,77 @@ lscat -C
 
 ## 🎯 Behavior Summary
 
-| Command | Recursion | Hidden Files | Pattern Support |
-|---------|-----------|--------------|-----------------|
-| `lscat` | ❌ Non-recursive | ✅ Shows hidden | N/A |
-| `lscat .` | ❌ Non-recursive | ✅ Shows hidden | N/A |
-| `lscat -d .` | ❌ Non-recursive | ❌ Hides hidden (unless `-a`) | ✅ |
-| `lscat -d *` | ✅ Recursive | ❌ Hides hidden (unless `-a`) | ✅ |
-| `lscat -d *.md` | ✅ Recursive | ❌ Hides hidden (unless `-a`) | ✅ |
+| Command | Recursion | Hidden Files | Description |
+|---------|-----------|--------------|-------------|
+| `lscat` | ❌ Non-recursive | ✅ Shows hidden | Tree of current directory |
+| `lscat -d .` | ❌ Non-recursive | ❌ Hides hidden (unless `-a`) | Current directory only |
+| `lscat -d *` | ✅ Recursive | ❌ Hides hidden (unless `-a`) | All directories recursively |
+| `lscat -f *` | ❌ Non-recursive | ❌ Hides hidden (unless `-a`) | All files in current directory |
+| `lscat -f *.md` | ❌ Non-recursive | ❌ Hides hidden (unless `-a`) | All .md files in current directory |
 
 ## 🔧 Pattern Syntax
 
-### Directory Patterns
+### Directory Patterns (`-d` flag)
 ```bash
-# Wildcards
-lscat -d *           # All non-hidden items
-lscat -d .*          # All hidden items
-lscat -d *.md        # All markdown files
-lscat -d src/*.js    # All JS files in src
+# Wildcards (recursive)
+lscat -d *           # All non-hidden directories
+lscat -d .*          # All hidden directories
+lscat -d src/*       # All items in src directory
 
 # Directory patterns
 lscat -d migration*/ # All migration directories
-lscat -d test*       # All items starting with 'test'
+lscat -d test*       # All directories starting with 'test'
 
 # Multiple patterns
-lscat -d *.md *.txt README.*
+lscat -d src lib tests
 ```
 
-### Skip Patterns
+### File Patterns (`-f` flag)
 ```bash
-# Skip file types
+# File patterns (non-recursive)
+lscat -f *           # All non-hidden files in current directory
+lscat -f .*          # All hidden files in current directory
+lscat -f *.md        # All markdown files in current directory
+lscat -f src/*.js    # All JS files in src directory (non-recursive)
+
+# Specific files
+lscat -f package.json README.md .gitignore
+```
+
+### Skip Patterns (`-s` flag)
+```bash
+# Skip by extension
 lscat -s *.log -s *.tmp
 
 # Skip directories
-lscat -s node_modules -s .git
+lscat -s node_modules -s .git -s dist
 
 # Skip specific files
 lscat -s package-lock.json -s .env
 
 # Skip with wildcards
 lscat -s test_* -s *_backup.*
+
+# Skip paths
+lscat -s ./cache -s ./logs
+
+# Skip hidden items
+lscat -s .*
 ```
+
+## ⚡ Skip Pattern Behavior
+
+The `-s` flag uses **intelligent pattern matching**:
+
+| Pattern Type | What it skips | Example |
+|--------------|---------------|---------|
+| **Exact name** | Items with exact name | `-s node_modules` skips `./node_modules` but not `src/node_modules.js` |
+| **Wildcard** | Pattern matches | `-s *.log` skips all `.log` files |
+| **Path pattern** | Items under path | `-s ./cache` skips `./cache` directory |
+| **Hidden items** | Hidden files/dirs | `-s .*` skips all hidden items |
+| **Directory only** | Directories only | `-s node_modules` only skips dirs named `node_modules` |
+
+**Note**: Skip patterns are applied after file/directory selection but before content processing.
 
 ## 📝 Output Examples
 
@@ -176,7 +214,7 @@ lscat -s test_* -s *_backup.*
 └── .gitignore
 ```
 
-### File Contents
+### File Contents with Delimiter
 ```
 File: src/App.js
 ---
@@ -203,39 +241,49 @@ export default App;
 
 ### AI Analysis
 ```bash
-# Prepare codebase for AI analysis
-lscat -d * -c -D codebase.txt
+# Prepare codebase for AI analysis (skip unnecessary files)
+lscat -f *.md *.json -d src -s node_modules -s *.log -c -D codebase.txt
 ```
 
 ### Documentation
 ```bash
 # Create project documentation
-lscat -d src *.md -l -D documentation.txt
+lscat -f *.md -d docs -l -D documentation.txt
 ```
 
 ### Code Review
 ```bash
-# Review specific file types
-lscat -d *.js *.ts -l -c
+# Review source code only
+lscat -d src -s node_modules -s dist -l -c
 ```
 
-### Backup/Archive
+### Project Archive
 ```bash
 # Archive project structure and contents
-lscat -d * -a -D project_archive.txt
+lscat -d * -f * -a -s node_modules -s .git -D project_archive.txt
 ```
 
-## ⚠️ Notes
+### Configuration Audit
+```bash
+# Audit configuration files
+lscat -f .* *.json *.yml *.yaml -s .git -c -D config_audit.txt
+```
 
-1. **Skip patterns** match both files and directories
-2. **Compression** creates dense, left-aligned text optimized for AI tokens
-3. **Hard compression** (`-C`) removes all newlines between statements
-4. **Colors are automatically disabled** when outputting to file
-5. **Patterns work with all value-accepting flags** (`-d`, `-s`, etc.)
-6. **Install option** (`-i`) cannot be combined with other options
+## ⚠️ Important Notes
+
+1. **Flag Separation**: Files and directories must be specified with `-f` or `-d` flags
+2. **Recursion**: `-d` is recursive with `*`, `-f` is non-recursive only
+3. **Skip Patterns**: Applied to both files and directories with intelligent matching
+4. **Compression**: 
+   - `-c`: Removes indentation and blank lines
+   - `-C`: Aggressive compression (one line per file)
+5. **Colors**: Automatically disabled when outputting to file
+6. **Pattern Quotes**: Use quotes for patterns: `-f "*.md"` not `-f *.md`
+7. **Install Option**: `-i` cannot be combined with other options
 
 ## 🔄 Version History
 
+- **1.4.0** - Added `-f` flag for file processing, improved skip pattern matching, removed positional arguments
 - **1.3.1** - Fixed default behavior consistency, enhanced pattern matching
 - **1.3.0** - Added comprehensive pattern support for all flags
 - **1.2.1** - Fixed regex errors, improved installation
