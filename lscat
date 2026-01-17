@@ -2,12 +2,12 @@
 
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
-# Version: 1.4.1 (Fixed skip pattern handling)
+# Version: 1.5.0 (Added header-type option)
 # License: MIT - See LICENSE file for details
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
-VERSION="1.4.1"
+VERSION="1.5.0"
 SCRIPT_NAME=$(basename "$0")
 
 # Default values
@@ -23,6 +23,7 @@ FILES=()
 CURRENT_DIR_ONLY=false
 NON_RECURSIVE=false
 POSITIONAL_DIRECTORIES=false  # Flag to track if dirs were positional
+HEADER_TYPE="tree"  # tree, ls, ls-R
 
 # ANSI color codes for better output (will be disabled when outputting to file)
 RED='\033[0;31m'
@@ -75,6 +76,10 @@ print_help() {
     echo "  -c, --compress             Compress content (remove indentation and blank lines)"
     echo "  -C, --compress-hard        Aggressive compression (remove all formatting, one-line per file)"
     echo "  -l, --line-numbers         Show line numbers in file contents"
+    echo "  -H, --header-type TYPE     Change header display style: tree (default), ls, ls-R"
+    echo "                             tree: Full tree structure with branches"
+    echo "                             ls: Simple ls-style list (compact)"
+    echo "                             ls-R: Recursive ls-style list with subdir levels"
     echo "  -i, --install              Install lscat system-wide (standalone option)"
     echo "  -h, --help                 Show this help message"
     echo "  -v, --version              Show version information"
@@ -97,6 +102,13 @@ print_help() {
     echo "  lscat -s .git -s node_modules   # Skip .git and node_modules directories"
     echo "  lscat -s ./client/node_modules/ # Skip specific directory path"
     echo ""
+    echo "HEADER TYPE EXAMPLES:"
+    echo "  lscat -d . -H tree         # Default tree structure (verbose)"
+    echo "  lscat -d . -H ls           # Compact ls-style listing"
+    echo "  lscat -d . -H ls-R         # Recursive ls-style listing"
+    echo "  lscat -d * -c -H ls        # Compact headers with compressed content"
+    echo "  lscat -d * -C -H ls        # Hard compression with compact headers"
+    echo ""
     echo "EXAMPLES:"
     echo "  $SCRIPT_NAME                           # Non-recursive list of current directory"
     echo "  $SCRIPT_NAME -d \"*\" -a -s .*         # All non-hidden recursively (skip hidden)"
@@ -111,6 +123,7 @@ print_help() {
     echo "  - Skip patterns match at any depth (e.g., -s node_modules skips all node_modules)"
     echo "  - -d flag is for directories only (recursive with *)"
     echo "  - -f flag is for files only (non-recursive, current directory only)"
+    echo "  - -H flag reduces header size when combining -d with -C or -c"
     echo "  - Default (no flags): non-recursive tree of current dir, shows hidden"
 }
 
@@ -756,6 +769,168 @@ get_tree_structure() {
     fi
 }
 
+# NEW: Get ls-style structure (compact, no tree branches)
+get_ls_structure() {
+    local dir="$1"
+    local depth="${2:-0}"
+    local recursive="${3:-true}"
+    local parent_is_hidden="${4:-false}"
+    local force_show_hidden="${5:-false}"
+    
+    # Apply non-recursive flag
+    if [[ "$NON_RECURSIVE" == true ]]; then
+        recursive=false
+    fi
+    
+    # Skip entire directory if it matches skip patterns
+    if should_skip "$dir"; then
+        if [[ $depth -eq 0 ]]; then
+            if [[ "$WRITING_TO_FILE" == false ]]; then
+                echo -e "${YELLOW}📁 $dir (skipped)${NC}"
+            else
+                echo "📁 $dir (skipped)"
+            fi
+        fi
+        return
+    fi
+    
+    # Check if current directory is hidden (starts with .)
+    local dir_name=$(basename "$dir")
+    local is_current_hidden=false
+    [[ "$dir_name" == .* ]] && is_current_hidden=true
+    
+    # Determine if we should show this directory
+    if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_current_hidden" == true ]] && [[ "$parent_is_hidden" == false ]]; then
+        return
+    fi
+    
+    # Print current directory (with indentation for subdirectories in ls-R mode)
+    local indent=""
+    if [[ $depth -gt 0 ]] && [[ "$HEADER_TYPE" == "ls-R" ]]; then
+        for ((i=0; i<depth; i++)); do
+            indent="${indent}  "
+        done
+        echo "${indent}$dir/"
+    elif [[ $depth -eq 0 ]]; then
+        if [[ "$WRITING_TO_FILE" == false ]]; then
+            echo -e "${BOLD}${BLUE}📁 $dir${NC}"
+        else
+            echo "📁 $dir"
+        fi
+    fi
+    
+    # Find items in directory
+    local find_opts="-maxdepth 1"
+    if [[ "$recursive" == false ]]; then
+        find_opts="-maxdepth 1"
+    fi
+    
+    local find_cmd="find \"$dir\" $find_opts -mindepth 1"
+    
+    if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]]; then
+        if [[ "$is_current_hidden" == true ]]; then
+            find_cmd="$find_cmd -not -name '.*'"
+        else
+            find_cmd="$find_cmd -not -name '.*' -not -path \"$dir/.*/*\""
+        fi
+    fi
+    
+    find_cmd="$find_cmd | sort"
+    
+    # Process files and directories separately for better organization
+    local files=()
+    local subdirs=()
+    
+    while IFS= read -r item; do
+        [[ -z "$item" ]] && continue
+        
+        local item_name=$(basename "$item")
+        local is_item_hidden=false
+        [[ "$item_name" == .* ]] && is_item_hidden=true
+        
+        # Skip if pattern matches
+        if should_skip "$item"; then
+            continue
+        fi
+        
+        # Skip hidden items if INCLUDE_HIDDEN is false and not forcing show hidden
+        if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$is_item_hidden" == true ]] && [[ "$is_current_hidden" == false ]]; then
+            continue
+        fi
+        
+        if [[ -d "$item" ]]; then
+            subdirs+=("$item")
+        else
+            files+=("$item")
+        fi
+    done < <(eval "$find_cmd 2>/dev/null")
+    
+    # Print files first
+    for item in "${files[@]}"; do
+        local item_name=$(basename "$item")
+        local ext="${item_name##*.}"
+        
+        # Add indentation for subdirectories in ls-R mode
+        local item_indent="$indent"
+        if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -gt 0 ]]; then
+            item_indent="${item_indent}  "
+        fi
+        
+        if [[ "$WRITING_TO_FILE" == false ]]; then
+            if [[ "$ext" == "$item_name" ]]; then
+                echo -e "${item_indent}${GREEN}$item_name${NC}"
+            elif [[ "$ext" == "sh" || "$ext" == "bash" ]]; then
+                echo -e "${item_indent}${MAGENTA}$item_name${NC}"
+            elif [[ "$ext" == "py" ]]; then
+                echo -e "${item_indent}${YELLOW}$item_name${NC}"
+            elif [[ "$ext" == "js" || "$ext" == "ts" ]]; then
+                echo -e "${item_indent}${CYAN}$item_name${NC}"
+            elif [[ "$ext" == "md" || "$ext" == "txt" ]]; then
+                echo -e "${item_indent}${GREEN}$item_name${NC}"
+            else
+                echo "${item_indent}$item_name"
+            fi
+        else
+            echo "${item_indent}$item_name"
+        fi
+    done
+    
+    # Print directories
+    for item in "${subdirs[@]}"; do
+        local item_name=$(basename "$item")
+        local item_indent="$indent"
+        
+        if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -gt 0 ]]; then
+            item_indent="${item_indent}  "
+        fi
+        
+        if [[ "$WRITING_TO_FILE" == false ]]; then
+            echo -e "${item_indent}${BLUE}$item_name/${NC}"
+        else
+            echo "${item_indent}$item_name/"
+        fi
+        
+        # Recurse into subdirectories if recursive flag is true and not skipping
+        if [[ "$recursive" == true ]] && [[ "$HEADER_TYPE" == "ls-R" ]] && ! should_skip "$item"; then
+            get_ls_structure "$item" $((depth + 1)) "$recursive" "$is_current_hidden" "$force_show_hidden"
+        fi
+    done
+    
+    # Print empty message if no items
+    if [[ ${#files[@]} -eq 0 ]] && [[ ${#subdirs[@]} -eq 0 ]]; then
+        if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -gt 0 ]]; then
+            echo "${indent}  (empty)"
+        else
+            echo "    (empty)"
+        fi
+    fi
+    
+    # Add a blank line between directories in ls-R mode for readability
+    if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -eq 0 ]] && [[ ${#subdirs[@]} -gt 0 ]]; then
+        echo ""
+    fi
+}
+
 # Process file content with options
 process_file_content() {
     local file="$1"
@@ -794,7 +969,7 @@ process_file_content() {
     fi
 }
 
-# Enhanced process_directory with NON_RECURSIVE support
+# Enhanced process_directory with HEADER_TYPE support
 process_directory() {
     local dir="$1"
     local dir_name=$(basename "$dir")
@@ -828,7 +1003,18 @@ process_directory() {
         recursive=false
     fi
     
-    get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
+    # Use appropriate header display based on HEADER_TYPE
+    case "$HEADER_TYPE" in
+        "tree")
+            get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
+            ;;
+        "ls"|"ls-R")
+            get_ls_structure "$dir" 0 "$recursive" false "$force_show_hidden"
+            ;;
+        *)
+            get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
+            ;;
+    esac
     
     # Process file contents
     local show_file_contents=false
@@ -985,6 +1171,26 @@ while [[ $# -gt 0 ]]; do
         -c|--compress) COMPRESS=true ;;
         -C|--compress-hard) COMPRESS_HARD=true; COMPRESS=true ;;
         -l|--line-numbers) SHOW_LINE_NUMBERS=true ;;
+        -H|--header-type)
+            shift
+            if [[ -n "$1" ]] && [[ ! "$1" =~ ^- ]]; then 
+                HEADER_TYPE="$1"
+                shift
+                # Validate header type
+                case "$HEADER_TYPE" in
+                    "tree"|"ls"|"ls-R")
+                        # Valid, do nothing
+                        ;;
+                    *)
+                        print_error "Invalid header type: $HEADER_TYPE. Use tree, ls, or ls-R"
+                        exit 1
+                        ;;
+                esac
+            else 
+                print_error "Header type requires a value: tree, ls, or ls-R"
+                exit 1
+            fi 
+            ;;
         -i|--install) print_error "Install option (-i/--install) cannot be combined with other options"; exit 1 ;;
         -*) print_error "Unknown option: $1"; exit 1 ;;
         *) 
