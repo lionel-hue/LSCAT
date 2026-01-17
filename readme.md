@@ -2,7 +2,7 @@
 
 `lscat` is a powerful command-line utility that combines directory listing with file concatenation capabilities, designed for AI analysis, documentation generation, and bulk file processing.
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue)
+![Version](https://img.shields.io/badge/version-1.5.0-blue)
 ![Shell](https://img.shields.io/badge/shell-bash-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -17,11 +17,13 @@
 - **Output to file** with automatic color disabling
 - **Advanced skip patterns** for precise file/directory exclusion
 - **Line numbering** for code analysis
+- **Header type selection** - Choose between tree, ls, or ls-R styles
 - **Easy installation** with system-wide setup option
 
 ## 📦 Installation
 
 ### Quick Install
+
 ```bash
 # Download and install
 git clone https://github.com/lionel-hue/LSCAT
@@ -39,6 +41,7 @@ Choose from these installation methods:
 ## 🚀 Usage
 
 ### Basic Examples
+
 ```bash
 # Show beautiful tree of current directory (non-recursive, shows hidden)
 lscat
@@ -60,6 +63,7 @@ lscat -f *.md -d src tests
 ```
 
 ### Pattern Examples
+
 ```bash
 # All non-hidden directories recursively
 lscat -d *
@@ -84,6 +88,7 @@ lscat -d server/database/migration*/
 ```
 
 ### Advanced Examples
+
 ```bash
 # Output to file with custom delimiter
 lscat -D output.txt -de "***"
@@ -102,6 +107,31 @@ lscat -C
 
 # Process project for AI analysis
 lscat -f *.md *.json -d src -s node_modules -s *.log -c -D ai_input.txt
+
+# Compact ls-style header with hard compression
+lscat -d * -C -H ls
+
+# Recursive ls-style listing
+lscat -d src -H ls-R
+```
+
+### Header Type Examples
+
+```bash
+# Default tree structure (verbose)
+lscat -d . -H tree
+
+# Compact ls-style listing
+lscat -d . -H ls
+
+# Recursive ls-style listing
+lscat -d . -H ls-R
+
+# Compact headers with compressed content
+lscat -d * -c -H ls
+
+# Hard compression with compact headers
+lscat -d * -C -H ls
 ```
 
 ## 📋 Options
@@ -117,6 +147,7 @@ lscat -f *.md *.json -d src -s node_modules -s *.log -c -D ai_input.txt
 | `--compress` | `-c` | Remove indentation and blank lines |
 | `--compress-hard` | `-C` | Aggressive compression (one-line per file) |
 | `--line-numbers` | `-l` | Show line numbers in file contents |
+| `--header-type` | `-H` | Change header display style: tree (default), ls, ls-R |
 | `--install` | `-i` | Install lscat system-wide |
 | `--help` | `-h` | Show help message |
 | `--version` | `-v` | Show version information |
@@ -134,33 +165,36 @@ lscat -f *.md *.json -d src -s node_modules -s *.log -c -D ai_input.txt
 ## 🔧 Pattern Syntax
 
 ### Directory Patterns (`-d` flag)
+
 ```bash
 # Wildcards (recursive)
-lscat -d *           # All non-hidden directories
-lscat -d .*          # All hidden directories
-lscat -d src/*       # All items in src directory
+lscat -d *             # All non-hidden directories
+lscat -d .*            # All hidden directories
+lscat -d src/*         # All items in src directory
 
 # Directory patterns
-lscat -d migration*/ # All migration directories
-lscat -d test*       # All directories starting with 'test'
+lscat -d migration*/   # All migration directories
+lscat -d test*         # All directories starting with 'test'
 
 # Multiple patterns
 lscat -d src lib tests
 ```
 
 ### File Patterns (`-f` flag)
+
 ```bash
 # File patterns (non-recursive)
-lscat -f *           # All non-hidden files in current directory
-lscat -f .*          # All hidden files in current directory
-lscat -f *.md        # All markdown files in current directory
-lscat -f src/*.js    # All JS files in src directory (non-recursive)
+lscat -f *             # All non-hidden files in current directory
+lscat -f .*            # All hidden files in current directory
+lscat -f *.md          # All markdown files in current directory
+lscat -f src/*.js      # All JS files in src directory (non-recursive)
 
 # Specific files
 lscat -f package.json README.md .gitignore
 ```
 
 ### Skip Patterns (`-s` flag)
+
 ```bash
 # Skip by extension
 lscat -s *.log -s *.tmp
@@ -180,6 +214,64 @@ lscat -s ./cache -s ./logs
 # Skip hidden items
 lscat -s .*
 ```
+
+## 📝 Header Types
+
+### Tree (Default)
+```bash
+lscat -d . -H tree
+```
+**Output:**
+```
+📁 current-directory/
+├── 📁 src/
+│   ├── 📁 components/
+│   │   ├── Button.js
+│   │   └── Header.js
+│   ├── App.js
+│   └── index.js
+├── package.json
+└── README.md
+```
+*Full tree structure with branches and indentation*
+
+### LS (Compact)
+```bash
+lscat -d . -H ls
+```
+**Output:**
+```
+📁 current-directory/
+Button.js
+Header.js
+App.js
+index.js
+package.json
+README.md
+```
+*Simple ls-style list, compact and space-efficient*
+
+### LS-R (Recursive LS)
+```bash
+lscat -d . -H ls-R
+```
+**Output:**
+```
+📁 current-directory/
+Button.js
+Header.js
+App.js
+index.js
+src/
+  components/
+    Button.js
+    Header.js
+  App.js
+  index.js
+package.json
+README.md
+```
+*Recursive ls-style list with indentation for subdirectories*
 
 ## ⚡ Skip Pattern Behavior
 
@@ -239,22 +331,22 @@ export default App;
 
 ## 💡 Use Cases
 
-### AI Analysis
+### AI Analysis with Compact Headers
 ```bash
-# Prepare codebase for AI analysis (skip unnecessary files)
-lscat -f *.md *.json -d src -s node_modules -s *.log -c -D codebase.txt
+# Prepare codebase for AI analysis with compact headers
+lscat -f *.md *.json -d src -s node_modules -s *.log -c -H ls -D codebase.txt
 ```
 
-### Documentation
+### Documentation with Line Numbers
 ```bash
-# Create project documentation
-lscat -f *.md -d docs -l -D documentation.txt
+# Create project documentation with line numbers
+lscat -f *.md -d docs -l -H tree -D documentation.txt
 ```
 
-### Code Review
+### Code Review with Compression
 ```bash
-# Review source code only
-lscat -d src -s node_modules -s dist -l -c
+# Review source code only with compression
+lscat -d src -s node_modules -s dist -l -c -H ls
 ```
 
 ### Project Archive
@@ -266,7 +358,13 @@ lscat -d * -f * -a -s node_modules -s .git -D project_archive.txt
 ### Configuration Audit
 ```bash
 # Audit configuration files
-lscat -f .* *.json *.yml *.yaml -s .git -c -D config_audit.txt
+lscat -f .* *.json *.yml *.yaml -s .git -c -H ls -D config_audit.txt
+```
+
+### Space-Efficient Output for Large Projects
+```bash
+# Maximum space savings for large codebases
+lscat -d * -C -H ls -s node_modules -s .git -s dist -D compact_output.txt
 ```
 
 ## ⚠️ Important Notes
@@ -274,15 +372,20 @@ lscat -f .* *.json *.yml *.yaml -s .git -c -D config_audit.txt
 1. **Flag Separation**: Files and directories must be specified with `-f` or `-d` flags
 2. **Recursion**: `-d` is recursive with `*`, `-f` is non-recursive only
 3. **Skip Patterns**: Applied to both files and directories with intelligent matching
-4. **Compression**: 
+4. **Compression**:
    - `-c`: Removes indentation and blank lines
    - `-C`: Aggressive compression (one line per file)
-5. **Colors**: Automatically disabled when outputting to file
-6. **Pattern Quotes**: Use quotes for patterns: `-f "*.md"` not `-f *.md`
-7. **Install Option**: `-i` cannot be combined with other options
+5. **Header Types**:
+   - `tree`: Default full tree structure (verbose)
+   - `ls`: Simple ls-style list (compact)
+   - `ls-R`: Recursive ls-style list with indentation
+6. **Colors**: Automatically disabled when outputting to file
+7. **Pattern Quotes**: Use quotes for patterns: `-f "*.md"` not `-f *.md`
+8. **Install Option**: `-i` cannot be combined with other options
 
 ## 🔄 Version History
 
+- **1.5.0** - Added `-H` flag for header type selection (tree, ls, ls-R), improved space efficiency
 - **1.4.0** - Added `-f` flag for file processing, improved skip pattern matching, removed positional arguments
 - **1.3.1** - Fixed default behavior consistency, enhanced pattern matching
 - **1.3.0** - Added comprehensive pattern support for all flags
@@ -293,27 +396,13 @@ lscat -f .* *.json *.yml *.yaml -s .git -c -D config_audit.txt
 
 ## 📄 License
 
-MIT License
+MIT License Copyright (c) 2023 [Lionel SISSO]
 
-Copyright (c) 2023 [Lionel SISSO]
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 See the [LICENSE](LICENSE) file for the full text.
 
