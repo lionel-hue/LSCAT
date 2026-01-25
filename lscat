@@ -2,12 +2,12 @@
 
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
-# Version: 1.5.0 (Added header-type option)
+# Version: 1.6.0 (Added header-type "none" option)
 # License: MIT - See LICENSE file for details
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
-VERSION="1.5.0"
+VERSION="1.6.0"
 SCRIPT_NAME=$(basename "$0")
 
 # Default values
@@ -23,7 +23,7 @@ FILES=()
 CURRENT_DIR_ONLY=false
 NON_RECURSIVE=false
 POSITIONAL_DIRECTORIES=false  # Flag to track if dirs were positional
-HEADER_TYPE="tree"  # tree, ls, ls-R
+HEADER_TYPE="tree"  # tree, ls, ls-R, none
 
 # ANSI color codes for better output (will be disabled when outputting to file)
 RED='\033[0;31m'
@@ -76,10 +76,11 @@ print_help() {
     echo "  -c, --compress             Compress content (remove indentation and blank lines)"
     echo "  -C, --compress-hard        Aggressive compression (remove all formatting, one-line per file)"
     echo "  -l, --line-numbers         Show line numbers in file contents"
-    echo "  -H, --header-type TYPE     Change header display style: tree (default), ls, ls-R"
+    echo "  -H, --header-type TYPE     Change header display style: tree (default), ls, ls-R, none"
     echo "                             tree: Full tree structure with branches"
     echo "                             ls: Simple ls-style list (compact)"
     echo "                             ls-R: Recursive ls-style list with subdir levels"
+    echo "                             none: No headers (for space saving)"
     echo "  -i, --install              Install lscat system-wide (standalone option)"
     echo "  -h, --help                 Show this help message"
     echo "  -v, --version              Show version information"
@@ -108,6 +109,7 @@ print_help() {
     echo "  lscat -d . -H ls-R         # Recursive ls-style listing"
     echo "  lscat -d * -c -H ls        # Compact headers with compressed content"
     echo "  lscat -d * -C -H ls        # Hard compression with compact headers"
+    echo "  lscat -d * -C -H none      # No headers with hard compression (max space saving)"
     echo ""
     echo "EXAMPLES:"
     echo "  $SCRIPT_NAME                           # Non-recursive list of current directory"
@@ -241,7 +243,7 @@ install_lscat() {
                 exit 1
             fi
             
-            mkdir -p "$install_dir" 2>/dev/null || sudo mkdir -p "$install_dir"
+            mkdir -p "$install_dir" 2>/dev/null || sudo mkdir -p "$install_dir")
             
             if cp "$SCRIPT_PATH" "$install_dir/lscat"; then
                 chmod +x "$install_dir/lscat"
@@ -987,34 +989,37 @@ process_directory() {
         return
     fi
     
-    if [[ "$WRITING_TO_FILE" == false ]]; then
-        echo -e "\n${BOLD}${MAGENTA}═══════════════════════════════════════════════════${NC}"
-        echo -e "${BOLD}Directory Structure:${NC}"
-        echo -e "${MAGENTA}═══════════════════════════════════════════════════${NC}\n"
-    else
-        echo -e "\n═══════════════════════════════════════════════════"
-        echo "Directory Structure:"
-        echo "═══════════════════════════════════════════════════\n"
+    # Skip header if HEADER_TYPE is "none"
+    if [[ "$HEADER_TYPE" != "none" ]]; then
+        if [[ "$WRITING_TO_FILE" == false ]]; then
+            echo -e "\n${BOLD}${MAGENTA}═══════════════════════════════════════════════════${NC}"
+            echo -e "${BOLD}Directory Structure:${NC}"
+            echo -e "${MAGENTA}═══════════════════════════════════════════════════${NC}\n"
+        else
+            echo -e "\n═══════════════════════════════════════════════════"
+            echo "Directory Structure:"
+            echo "═══════════════════════════════════════════════════\n"
+        fi
+        
+        # Determine recursion
+        local recursive=true
+        if [[ "$NON_RECURSIVE" == true ]] && [[ "$dir" == "." ]]; then
+            recursive=false
+        fi
+        
+        # Use appropriate header display based on HEADER_TYPE
+        case "$HEADER_TYPE" in
+            "tree")
+                get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
+                ;;
+            "ls"|"ls-R")
+                get_ls_structure "$dir" 0 "$recursive" false "$force_show_hidden"
+                ;;
+            *)
+                get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
+                ;;
+        esac
     fi
-    
-    # Determine recursion
-    local recursive=true
-    if [[ "$NON_RECURSIVE" == true ]] && [[ "$dir" == "." ]]; then
-        recursive=false
-    fi
-    
-    # Use appropriate header display based on HEADER_TYPE
-    case "$HEADER_TYPE" in
-        "tree")
-            get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
-            ;;
-        "ls"|"ls-R")
-            get_ls_structure "$dir" 0 "$recursive" false "$force_show_hidden"
-            ;;
-        *)
-            get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
-            ;;
-    esac
     
     # Process file contents
     local show_file_contents=false
@@ -1178,16 +1183,16 @@ while [[ $# -gt 0 ]]; do
                 shift
                 # Validate header type
                 case "$HEADER_TYPE" in
-                    "tree"|"ls"|"ls-R")
+                    "tree"|"ls"|"ls-R"|"none")
                         # Valid, do nothing
                         ;;
                     *)
-                        print_error "Invalid header type: $HEADER_TYPE. Use tree, ls, or ls-R"
+                        print_error "Invalid header type: $HEADER_TYPE. Use tree, ls, ls-R, or none"
                         exit 1
                         ;;
                 esac
             else 
-                print_error "Header type requires a value: tree, ls, or ls-R"
+                print_error "Header type requires a value: tree, ls, ls-R, or none"
                 exit 1
             fi 
             ;;
