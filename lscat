@@ -243,7 +243,7 @@ install_lscat() {
                 exit 1
             fi
             
-            mkdir -p "$install_dir" 2>/dev/null || sudo mkdir -p "$install_dir")
+            mkdir -p "$install_dir" 2>/dev/null || sudo mkdir -p "$install_dir"
             
             if cp "$SCRIPT_PATH" "$install_dir/lscat"; then
                 chmod +x "$install_dir/lscat"
