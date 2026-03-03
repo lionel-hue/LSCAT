@@ -1,5 +1,6 @@
 # .gitignore
 test.txt
+test.txt
 *.log
 *.tmp
 output*.txt

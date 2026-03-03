@@ -1,12 +1,12 @@
 #!/bin/bash
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
-# Version: 1.7.0 (Added separate skip flags for dirs and files)
+# Version: 1.7.2 (Fixed shell expansion issues)
 # License: MIT - See LICENSE file for details
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
-VERSION="1.7.0"
+VERSION="1.7.2"
 SCRIPT_NAME=$(basename "$0")
 
 # Default values
@@ -1223,79 +1223,21 @@ if [[ $# -eq 1 ]] && ([[ "$1" == "-i" ]] || [[ "$1" == "--install" ]]); then
     install_lscat
 fi
 
-# Arrays to store raw arguments for later processing
-RAW_ARGS=("$@")
+# Store all arguments
+ALL_ARGS=("$@")
 
-# First pass: collect all arguments to reorder them if needed
-declare -a ARG_ARRAY
-declare -a DIR_ARGS
-declare -a FILE_ARGS
-declare -a SKIP_DIR_ARGS
-declare -a SKIP_FILE_ARGS
-declare -a OTHER_ARGS
+# Debug: print all arguments
+# echo "DEBUG: Number of arguments: ${#ALL_ARGS[@]}" >&2
+# for i in "${!ALL_ARGS[@]}"; do
+#     echo "DEBUG: Argument $i: '${ALL_ARGS[$i]}'" >&2
+# done
 
+# Parse arguments with robust handling for shell expansion
 i=0
-while [[ $i -lt ${#RAW_ARGS[@]} ]]; do
-    arg="${RAW_ARGS[$i]}"
+while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
+    arg="${ALL_ARGS[$i]}"
     
     case "$arg" in
-        -d|--dir)
-            ((i++))
-            while [[ $i -lt ${#RAW_ARGS[@]} ]] && [[ ! "${RAW_ARGS[$i]}" =~ ^- ]]; do
-                DIR_ARGS+=("${RAW_ARGS[$i]}")
-                ((i++))
-            done
-            continue
-            ;;
-        -f|--file)
-            ((i++))
-            while [[ $i -lt ${#RAW_ARGS[@]} ]] && [[ ! "${RAW_ARGS[$i]}" =~ ^- ]]; do
-                FILE_ARGS+=("${RAW_ARGS[$i]}")
-                ((i++))
-            done
-            continue
-            ;;
-        -sd|--skip-dir)
-            ((i++))
-            while [[ $i -lt ${#RAW_ARGS[@]} ]] && [[ ! "${RAW_ARGS[$i]}" =~ ^- ]]; do
-                SKIP_DIR_ARGS+=("${RAW_ARGS[$i]}")
-                ((i++))
-            done
-            continue
-            ;;
-        -sf|--skip-file)
-            ((i++))
-            while [[ $i -lt ${#RAW_ARGS[@]} ]] && [[ ! "${RAW_ARGS[$i]}" =~ ^- ]]; do
-                SKIP_FILE_ARGS+=("${RAW_ARGS[$i]}")
-                ((i++))
-            done
-            continue
-            ;;
-        *)
-            OTHER_ARGS+=("$arg")
-            ((i++))
-            ;;
-    esac
-done
-
-# Reconstruct arguments in a consistent order
-ARG_ARRAY=("${OTHER_ARGS[@]}")
-if [[ ${#DIR_ARGS[@]} -gt 0 ]]; then
-    ARG_ARRAY+=("-d" "${DIR_ARGS[@]}")
-fi
-if [[ ${#FILE_ARGS[@]} -gt 0 ]]; then
-    ARG_ARRAY+=("-f" "${FILE_ARGS[@]}")
-fi
-if [[ ${#SKIP_DIR_ARGS[@]} -gt 0 ]]; then
-    ARG_ARRAY+=("-sd" "${SKIP_DIR_ARGS[@]}")
-fi
-if [[ ${#SKIP_FILE_ARGS[@]} -gt 0 ]]; then
-    ARG_ARRAY+=("-sf" "${SKIP_FILE_ARGS[@]}")
-fi
-
-# Parse the reordered arguments
-while [[ ${#ARG_ARRAY[@]} -gt 0 ]]; do
-    case "${ARG_ARRAY[0]}" in
         -h|--help)
             print_help
             exit 0
@@ -1305,64 +1247,62 @@ while [[ ${#ARG_ARRAY[@]} -gt 0 ]]; do
             exit 0
             ;;
         -d|--dir)
-            # Shift past the -d flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            # Collect all non-option arguments
-            while [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; do
-                DIRECTORIES+=("${ARG_ARRAY[0]}")
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            # Collect all directory arguments until next flag or end of array
+            while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
+                DIRECTORIES+=("${ALL_ARGS[$i]}")
+                ((i++))
             done
-            continue
+            # Decrement i to reprocess the next flag
+            ((i--))
             ;;
         -f|--file)
-            # Shift past the -f flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            # Collect all non-option arguments
-            while [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; do
-                FILES+=("${ARG_ARRAY[0]}")
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            # Collect all file arguments until next flag or end of array
+            while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
+                FILES+=("${ALL_ARGS[$i]}")
+                ((i++))
             done
-            continue
+            # Decrement i to reprocess the next flag
+            ((i--))
             ;;
         -sd|--skip-dir)
-            # Shift past the -sd flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            # Collect all non-option arguments
-            while [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; do
-                SKIP_DIRS+=("${ARG_ARRAY[0]}")
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            # Collect all skip dir arguments until next flag or end of array
+            while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
+                SKIP_DIRS+=("${ALL_ARGS[$i]}")
+                ((i++))
             done
-            continue
+            # Decrement i to reprocess the next flag
+            ((i--))
             ;;
         -sf|--skip-file)
-            # Shift past the -sf flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            # Collect all non-option arguments
-            while [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; do
-                SKIP_FILES+=("${ARG_ARRAY[0]}")
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            # Collect all skip file arguments until next flag or end of array
+            while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
+                SKIP_FILES+=("${ALL_ARGS[$i]}")
+                ((i++))
             done
-            continue
+            # Decrement i to reprocess the next flag
+            ((i--))
             ;;
         -a|--all)
             INCLUDE_HIDDEN=true
             ;;
         -D|--destination)
-            # Shift past the -D flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            # Collect all non-option arguments
-            while [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; do
-                OUTPUT_FILES+=("${ARG_ARRAY[0]}")
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            # Collect output file arguments
+            while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
+                OUTPUT_FILES+=("${ALL_ARGS[$i]}")
+                ((i++))
             done
-            continue
+            # Decrement i to reprocess the next flag
+            ((i--))
             ;;
         -de|--delimiter)
-            # Shift past the -de flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            if [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; then
-                DELIMITER="${ARG_ARRAY[0]}"
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            if [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; then
+                DELIMITER="${ALL_ARGS[$i]}"
             else
                 print_error "Delimiter requires a value"
                 exit 1
@@ -1379,11 +1319,9 @@ while [[ ${#ARG_ARRAY[@]} -gt 0 ]]; do
             SHOW_LINE_NUMBERS=true
             ;;
         -H|--header-type)
-            # Shift past the -H flag
-            ARG_ARRAY=("${ARG_ARRAY[@]:1}")
-            if [[ ${#ARG_ARRAY[@]} -gt 0 ]] && [[ ! "${ARG_ARRAY[0]}" =~ ^- ]]; then
-                HEADER_TYPE="${ARG_ARRAY[0]}"
-                ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+            ((i++))
+            if [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; then
+                HEADER_TYPE="${ALL_ARGS[$i]}"
                 # Validate header type
                 case "$HEADER_TYPE" in
                     "tree"|"ls"|"ls-R"|"none")
@@ -1403,20 +1341,31 @@ while [[ ${#ARG_ARRAY[@]} -gt 0 ]]; do
             print_error "Install option (-i/--install) cannot be combined with other options"
             exit 1
             ;;
+        --)
+            # End of options
+            ((i++))
+            # Anything after -- should be treated as file/directory arguments
+            # But since we don't support positional arguments, we'll treat them as files
+            while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
+                FILES+=("${ALL_ARGS[$i]}")
+                ((i++))
+            done
+            break
+            ;;
         -*)
-            print_error "Unknown option: ${ARG_ARRAY[0]}"
+            print_error "Unknown option: $arg"
             exit 1
             ;;
         *)
             # Positional arguments are no longer supported
             print_error "Positional arguments are not supported. Use -d for directories or -f for files."
             print_error "Example: lscat -d . or lscat -f *.md"
+            print_error "Found argument: $arg"
             exit 1
             ;;
     esac
     
-    # Shift to next argument
-    ARG_ARRAY=("${ARG_ARRAY[@]:1}")
+    ((i++))
 done
 
 # Handle default case (no arguments)
@@ -1434,7 +1383,7 @@ fi
 # Expand patterns in all arrays that support them
 if [[ ${#DIRECTORIES[@]} -gt 0 ]]; then
     # Create temporary array for expanded directories
-    local temp_dirs=()
+    temp_dirs=()
     for dir in "${DIRECTORIES[@]}"; do
         # Use mapfile to handle multi-line output from expand_patterns
         while IFS= read -r expanded_item; do
@@ -1449,7 +1398,7 @@ fi
 
 if [[ ${#FILES[@]} -gt 0 ]]; then
     # Create temporary array for expanded files
-    local temp_files=()
+    temp_files=()
     for file in "${FILES[@]}"; do
         # Use mapfile to handle multi-line output from expand_file_patterns
         while IFS= read -r expanded_item; do
@@ -1462,9 +1411,41 @@ if [[ ${#FILES[@]} -gt 0 ]]; then
     FILES=("${temp_files[@]}")
 fi
 
+if [[ ${#SKIP_DIRS[@]} -gt 0 ]]; then
+    # Create temporary array for expanded skip dirs
+    temp_skip_dirs=()
+    for pattern in "${SKIP_DIRS[@]}"; do
+        # Use mapfile to handle multi-line output from expand_patterns
+        while IFS= read -r expanded_item; do
+            if [[ -n "$expanded_item" ]]; then
+                temp_skip_dirs+=("$expanded_item")
+            fi
+        done < <(expand_patterns "$pattern")
+    done
+    # Update SKIP_DIRS with expanded items
+    SKIP_DIRS=("${temp_skip_dirs[@]}")
+fi
+
+if [[ ${#SKIP_FILES[@]} -gt 0 ]]; then
+    # Create temporary array for expanded skip files
+    temp_skip_files=()
+    for pattern in "${SKIP_FILES[@]}"; do
+        # Use mapfile to handle multi-line output from expand_file_patterns
+        while IFS= read -r expanded_item; do
+            if [[ -n "$expanded_item" ]]; then
+                temp_skip_files+=("$expanded_item")
+            fi
+        done < <(expand_file_patterns "$pattern")
+    done
+    # Update SKIP_FILES with expanded items
+    SKIP_FILES=("${temp_skip_files[@]}")
+fi
+
 # Debug: show what we expanded to
 # echo "DEBUG: Expanded DIRECTORIES: ${DIRECTORIES[@]}" >&2
 # echo "DEBUG: Expanded FILES: ${FILES[@]}" >&2
+# echo "DEBUG: Expanded SKIP_DIRS: ${SKIP_DIRS[@]}" >&2
+# echo "DEBUG: Expanded SKIP_FILES: ${SKIP_FILES[@]}" >&2
 
 # Set flags based on the directory specification
 if [[ " ${DIRECTORIES[@]} " =~ " . " ]] && [[ ${#DIRECTORIES[@]} -eq 1 ]]; then
