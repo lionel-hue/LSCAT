@@ -6,7 +6,7 @@
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
-VERSION="1.7.2"
+VERSION="1.7.3"
 SCRIPT_NAME=$(basename "$0")
 
 # Default values
@@ -749,10 +749,7 @@ get_tree_structure() {
     fi
     
     # Find items in directory
-    local find_opts=""
-    if [[ "$recursive" == false ]]; then
-        find_opts="-maxdepth 1"
-    fi
+    local find_opts="-maxdepth 1"
     
     local find_cmd="find \"$dir\" $find_opts -mindepth 1"
     
