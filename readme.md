@@ -1,354 +1,445 @@
-# 📂 lscat - The Ultimate Codebase Concatenator
+# lscat
 
-![Version](https://img.shields.io/badge/version-1.7.2-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
-![Shell](https://img.shields.io/badge/shell-Bash%20%7C%20PowerShell-orange)
+**List and concatenate directory/file contents — built for humans and AI workflows.**
 
-**lscat** (List & Concatenate) is a powerful cross-platform command-line utility designed to **turn your directory structure and file contents into a single, structured text stream.** 
-
-Think of it as taking a **complete snapshot of your codebase**. It recursively lists your folder structure like a tree and then appends the content of every file underneath, separated by customizable delimiters.
+`lscat` is a Bash utility that walks your directory tree, prints a structured overview, and concatenates file contents with customizable delimiters. It is especially useful for feeding entire codebases or documentation trees into AI prompts, generating snapshots for code reviews, or producing lightweight file digests.
 
 ---
 
-## 🚀 Why Use lscat?
+## Table of Contents
 
-In the era of Large Language Models (LLMs), context is king. `lscat` solves the problem of feeding entire projects into AI tools efficiently.
-
-| Use Case | Description |
-| :--- | :--- |
-| **🤖 AI Analysis** | Paste your entire project into ChatGPT, Claude, or Copilot for refactoring, debugging, or documentation generation. |
-| **📚 Documentation** | Generate a text-based archive of your project structure and code for offline reading or wikis. |
-| **📦 Bulk Processing** | Quickly combine multiple configuration files, logs, or scripts for review or migration. |
-| **👥 Code Review** | Send a specific module's structure and code to a colleague in a single copy-paste action. |
-| **💾 Backup** | Create a lightweight text snapshot of critical source code without binary blobs. |
-
----
-
-## 📦 Installation
-
-`lscat` is designed to work natively on your operating system. 
-- **Linux/macOS:** Uses the `lscat` Bash script.
-- **Windows:** Uses the `dircat.bat` launcher (which calls `dircat.ps1`).
-
-### 🐧 Linux / macOS
-
-1.  **Download the script:**
-    ```bash
-    curl -O https://raw.githubusercontent.com/yourusername/lscat/main/lscat
-    ```
-2.  **Make it executable:**
-    ```bash
-    chmod +x lscat
-    ```
-3.  **Test it:**
-    ```bash
-    ./lscat --help
-    ```
-4.  **Install System-Wide (Optional):**
-    ```bash
-    ./lscat -i
-    ```
-    *Follow the prompts to install to `~/.local/bin` (Recommended) or `/usr/local/bin`.*
-    > **⚠️ Note:** If installed to `~/.local/bin`, ensure it is added to your `$PATH`.
-
-### 🪟 Windows
-
-1.  **Download Both Files:**
-    You need **both** files in the same folder for Windows to work correctly:
-    *   `dircat.bat`: The launcher (handles execution policies).
-    *   `dircat.ps1`: The logic engine (PowerShell).
-2.  **Test it:**
-    Open Command Prompt or PowerShell in that folder:
-    ```cmd
-    dircat.bat --help
-    ```
-3.  **Install System-Wide (Optional):**
-    ```cmd
-    dircat.bat -i
-    ```
-    > **⚠️ Important:** After installation, add `%USERPROFILE%\.local\bin` to your system **PATH** environment variable. You may need to restart your terminal.
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Options Reference](#options-reference)
+- [Header Styles](#header-styles)
+- [Compression Modes](#compression-modes)
+- [Pattern Matching](#pattern-matching)
+- [Filtering](#filtering)
+- [Output to File](#output-to-file)
+- [Examples](#examples)
+- [Tips & Best Practices](#tips--best-practices)
+- [License](#license)
 
 ---
 
-## 🎮 Quick Start
+## Features
 
-| Goal | Command |
-| :--- | :--- |
-| **List current folder** | `lscat` or `dircat.bat` |
-| **List specific folder** | `lscat -d src` |
-| **List all folders** | `lscat -d "*"` |
-| **List specific files** | `lscat -f "*.md"` |
-| **Save to file** | `lscat -D output.txt` |
-| **Skip dependencies** | `lscat -sd node_modules -sd .git` |
-| **Max Compression (AI)** | `lscat -d "*" -C -H none -sd node_modules` |
+- **Recursive directory traversal** with full tree or compact list display
+- **File content concatenation** with configurable delimiters
+- **Four header styles** — `tree`, `ls`, `ls-R`, `none` — to balance verbosity and compactness
+- **Two compression modes** — strip whitespace (`-c`) or flatten to a single line per file (`-C`)
+- **Pattern-based filtering** — skip directories and files matching glob patterns at any depth
+- **Hidden file support** — include or exclude dotfiles and hidden directories
+- **Line numbers** in output
+- **Multi-destination output** — pipe to stdout or write to one or more files
+- **Color-coded terminal output** — automatically disabled when writing to a file
+- **Built-in installer** — one command to install system-wide or per-user
 
 ---
 
-## 📖 Detailed Usage Guide
+## Installation
 
-### 1. Selecting What to Process
+### Quick install (recommended)
 
-You can target **Directories** (recursive) or **Files** (non-recursive).
-
-#### Directories (`-d`, `--dir`)
-Scans folders and all their contents recursively.
+Run the built-in installer, which will guide you through per-user or system-wide placement:
 
 ```bash
-# Process the 'src' folder and all subfolders
-lscat -d src
+chmod +x lscat
+./lscat --install
+```
 
-# Process ALL directories recursively (excluding hidden)
+You will be prompted to choose one of:
+
+| Option | Path | Requires sudo |
+|--------|------|---------------|
+| Current user | `~/.local/bin/lscat` | No |
+| System-wide | `/usr/local/bin/lscat` | Yes |
+| System-wide (alt) | `/usr/bin/lscat` | Yes |
+| Custom + symlink | User-defined | Maybe |
+
+The installer automatically adds `~/.local/bin` to your `$PATH` in `~/.bashrc` and `~/.zshrc` if it is not already present.
+
+### Manual install
+
+```bash
+chmod +x lscat
+cp lscat ~/.local/bin/lscat
+```
+
+Make sure `~/.local/bin` is on your `$PATH`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+---
+
+## Quick Start
+
+```bash
+# Show a tree of the current directory
+lscat
+
+# Show and concatenate all files in the current directory
+lscat -d .
+
+# Recursively process all directories
 lscat -d "*"
 
-# Process ALL directories (including hidden like .git)
-lscat -d "*" -a
-```
-
-#### Files (`-f`, `--file`)
-Grabs specific files in the current directory (non-recursive).
-
-```bash
-# Process all Markdown files in current folder
+# Process only specific file types
 lscat -f "*.md"
 
-# Process specific files
-lscat -f readme.md config.json
-```
-
-### 2. Skipping Unwanted Content (`-sd`, `-sf`)
-
-Crucial for AI context windows. Skip heavy folders like dependencies, build artifacts, or logs.
-
-```bash
-# Skip any folder named 'node_modules' anywhere in the tree
-lscat -sd node_modules
-
-# Skip any file ending in .log
-lscat -sf "*.log"
-
-# Combine skips for a clean AI context
-lscat -d "*" -sd .git -sd node_modules -sd dist -sf "*.log"
-```
-
-> **💡 Tip:** Skip patterns match at **any depth**. `-sd node_modules` skips `./node_modules` AND `./client/node_modules`.
-
-### 3. Output Formatting
-
-#### Destination (`-D`, `--destination`)
-Save the output to a file instead of printing to the screen.
-
-```bash
-lscat -d src -D project_snapshot.txt
-```
-
-#### Delimiter (`-de`, `--delimiter`)
-Change the separator between files (Default is `---`).
-
-```bash
-lscat -d src -de "***"
-```
-
-#### Header Types (`-H`, `--header-type`)
-Control how the directory structure is displayed before file contents. This is vital for managing output size.
-
-| Type | Description | Best For |
-| :--- | :--- | :--- |
-| `tree` | Full tree with branches (`├──`, `└──`) | Visual clarity, human reading |
-| `ls` | Simple list (compact) | Saving space |
-| `ls-R` | Recursive list with indentation | Medium detail |
-| `none` | No structure list | **Maximum compression for AI** |
-
-```bash
-# Compact output for AI
-lscat -d "*" -H ls -C -D ai_context.txt
-```
-
-### 4. Compression Modes (Save Tokens!)
-
-When sending code to AI, whitespace costs tokens. Use compression to reduce size significantly.
-
-| Flag | Effect | Example Output |
-| :--- | :--- | :--- |
-| *(none)* | Original formatting | ` function test() {` |
-| `-c` (`--compress`) | Trims indentation & blank lines | `function test() {` |
-| `-C` (`--compress-hard`) | **Aggressive:** One line per file | `function test() { ... }` |
-
-```bash
-# Maximum space saving for large codebases
-lscat -d "*" -sd node_modules -C -H none -D context.txt
-```
-
-### 5. Line Numbers (`-l`, `--line-numbers`)
-Helpful for debugging references when discussing code with AI or colleagues.
-
-```bash
-lscat -d src -l
-```
-
-### 6. Hidden Files (`-a`, `--all`)
-Include files starting with `.` (like `.gitignore`, `.env`, `.config`).
-
-```bash
-# Include hidden files in current directory
-lscat -a
-
-# Include hidden directories recursively
-lscat -d "*" -a
+# Save a full project snapshot to a file for an AI prompt
+lscat -d "*" -C -H none -D context.txt
 ```
 
 ---
 
-## 🧠 Real-World Examples
+## Usage
 
-### 1. The "AI Context" Dump
-Prepare your entire project for an LLM, excluding dependencies and build artifacts. This is the most common use case.
-
-```bash
-# Linux
-./lscat -d "*" -sd node_modules -sd .git -sd dist -sf "*.log" -c -H ls -D ai_context.txt
-
-# Windows
-dircat.bat -d "*" -sd node_modules -sd .git -sd dist -sf "*.log" -c -H ls -D ai_context.txt
+```
+lscat [OPTIONS]
 ```
 
-### 2. Documentation Generator
-Create a text file containing all your markdown documentation.
+Files and directories **must** be specified with `-f` or `-d` flags. Positional arguments are not supported. When called with no arguments, `lscat` produces a non-recursive tree of the current directory.
 
-```bash
-lscat -f "*.md" -d docs -D documentation.txt
+---
+
+## Options Reference
+
+### Input
+
+| Flag | Long form | Description |
+|------|-----------|-------------|
+| `-d DIR [DIR...]` | `--dir` | Directories to process. Supports patterns and multiple values. |
+| `-f FILE [FILE...]` | `--file` | Files to process (non-recursive, current directory by default). Supports glob patterns. |
+| `-a` | `--all` | Include hidden files and directories (dotfiles). |
+
+**Special values for `-d`:**
+
+| Value | Behaviour |
+|-------|-----------|
+| `.` | Current directory only, non-recursive |
+| `*` | All non-hidden directories, recursively |
+| `.*` | All hidden directories, recursively |
+| `migration*/` | All directories whose name matches the glob |
+
+**Special values for `-f`:**
+
+| Value | Behaviour |
+|-------|-----------|
+| `*` | All non-hidden files in the current directory |
+| `.*` | All hidden files in the current directory |
+| `*.md` | All Markdown files in the current directory |
+| `client/src/*.js` | All `.js` files inside `client/src/` |
+
+### Output
+
+| Flag | Long form | Description |
+|------|-----------|-------------|
+| `-D FILE` | `--destination` | Write output to this file (creates if missing, overwrites if present). Can be specified multiple times for multiple output files. |
+| `-de STR` | `--delimiter` | String printed between file contents. Default: `---` |
+| `-l` | `--line-numbers` | Prefix each line of file content with its line number. |
+
+### Compression
+
+| Flag | Long form | Description |
+|------|-----------|-------------|
+| `-c` | `--compress` | Remove leading/trailing whitespace and blank lines from file contents. |
+| `-C` | `--compress-hard` | Aggressive mode: also join all lines into a single line per file. Implies `-c`. Best used with `-H none` to minimise total token count. |
+
+### Header Style
+
+| Flag | Long form | Description |
+|------|-----------|-------------|
+| `-H TYPE` | `--header-type` | Controls the directory listing format. Valid values: `tree` (default), `ls`, `ls-R`, `none`. |
+
+### Filtering
+
+| Flag | Long form | Description |
+|------|-----------|-------------|
+| `-sd PATTERN` | `--skip-dir` | Skip any directory matching this pattern. Matches at any depth. Repeatable. |
+| `-sf PATTERN` | `--skip-file` | Skip any file matching this pattern. Matches at any depth. Repeatable. |
+
+### Utility
+
+| Flag | Long form | Description |
+|------|-----------|-------------|
+| `-i` | `--install` | Run the interactive installer. Must be used alone. |
+| `-h` | `--help` | Print the help message. |
+| `-v` | `--version` | Print version information. |
+
+---
+
+## Header Styles
+
+The `-H` / `--header-type` flag controls how the directory structure is displayed before file contents.
+
+### `tree` (default)
+
+Full tree with branch connectors. Most informative, most verbose.
+
+```
+📁 .
+├── README.md
+├── lscat
+└── src/
+    ├── main.sh
+    └── utils.sh
 ```
 
-### 3. Debugging a Specific Module
-View the structure and code of a specific utility folder with line numbers.
+### `ls`
 
-```bash
-lscat -d src/utils -l -H tree
+Flat list of files and folders. Compact, easy to scan.
+
+```
+📁 .
+README.md
+lscat
+src/
 ```
 
-### 4. Quick Configuration Review
-Combine all config files in the root directory.
+### `ls-R`
 
-```bash
-lscat -f "*.json" -f "*.yaml" -f ".env"
+Recursive listing with indented subdirectories, similar to `ls -R`.
+
+```
+📁 .
+README.md
+lscat
+src/
+  src/
+    main.sh
+    utils.sh
 ```
 
-### 5. Maximum Compression (Token Saving)
-Strip all headers and whitespace for massive codebases to fit within strict token limits.
+### `none`
+
+No directory header printed at all. Combined with `-C`, this produces the most compact output possible — ideal for maximising the amount of code you can fit in an AI context window.
 
 ```bash
-lscat -d "*" -sd node_modules -C -H none -D tiny_context.txt
+lscat -d "*" -C -H none -D context.txt
 ```
 
 ---
 
-## ⚙️ Technical Details
+## Compression Modes
 
-### Pattern Matching Rules
-*   `*`: Matches all non-hidden items.
-*   `.*`: Matches all hidden items (starts with `.`).
-*   `*.ext`: Matches files with specific extension.
-*   **Skip Patterns:** Match at **any depth**. `-sd node_modules` skips `./node_modules` AND `./client/node_modules`.
-*   **Quotes:** On Linux/Mac, always quote patterns (e.g., `"*"`) to prevent shell expansion before the script sees them.
+### `-c` — Standard compression
 
-### Default Behavior
-Running `lscat` or `dircat.bat` without arguments defaults to:
-*   Current directory (`.`)
-*   Non-recursive
-*   Shows hidden files
-*   Tree header style
+Strips leading/trailing whitespace and removes blank lines from each file's content. Good for reducing noise while keeping code readable.
 
-### File Structure
-Your project should look like this for cross-platform support:
+### `-C` — Hard compression
 
-```text
-/project-root
-├── lscat          # Linux/Mac script
-├── dircat.bat     # Windows launcher
-├── dircat.ps1     # Windows logic
-└── README.md      # This file
+Strips all whitespace and collapses each file into a single continuous line. Intended for AI context packing where token count matters more than readability.
+
+> **Tip:** Combine `-C -H none` for maximum density. You can always pair with `-D` to save the result to a file before pasting into a prompt.
+
+---
+
+## Pattern Matching
+
+`lscat` supports glob patterns in `-d`, `-f`, `-sd`, and `-sf` flags. Because the shell expands unquoted globs before passing them to the script, **always quote patterns**:
+
+```bash
+# Good — lscat receives the literal pattern
+lscat -f "*.md"
+lscat -d "migration*/"
+
+# Bad — the shell expands *.md before lscat sees it
+lscat -f *.md
 ```
 
-### Compression Logic
-*   **Normal Compress (`-c`):** Removes leading/trailing whitespace from lines and removes empty lines. Preserves code structure.
-*   **Hard Compress (`-C`):** Removes all formatting, joins lines into a single continuous stream per file, handles multiline comments intelligently to avoid breaking syntax completely.
+### How patterns are matched
+
+- `-d "migration*/"` matches any directory whose name starts with `migration`, at any depth.
+- `-sf "*.log"` skips any file ending in `.log`, anywhere in the tree.
+- `-sd node_modules` skips every directory named `node_modules`, no matter how deeply nested.
+- `-sd ./client/node_modules` skips only that specific path.
 
 ---
 
-## ❓ Troubleshooting & FAQ
+## Filtering
 
-**Q: Windows says "Execution Policy" error.**
-*   **A:** The `dircat.bat` launcher is designed to bypass this automatically using `-ExecutionPolicy Bypass`. Ensure you run `dircat.bat`, **not** `dircat.ps1` directly.
+Skip patterns apply to **both** the tree display and file content processing — a skipped directory or file will not appear in either section of the output.
 
-**Q: Command not found after installation.**
-*   **A:** You need to add the installation folder to your PATH.
-    *   **Linux/Mac:** `~/.local/bin`
-    *   **Windows:** `%USERPROFILE%\.local\bin`
-    *   *Tip:* Restart your terminal after installing.
+### Skip common noise directories
 
-**Q: Output is too large for AI.**
-*   **A:** Use hard compression and skip more folders.
-    *   Add `-C` (Hard Compress)
-    *   Add `-H none` (Remove headers)
-    *   Add `-sd` for large folders (e.g., `vendor`, `build`, `coverage`).
+```bash
+lscat -d "*" -sd node_modules -sd .git -sd dist -sd __pycache__
+```
 
-**Q: Can I process multiple directories?**
-*   **A:** Yes!
-    ```bash
-    lscat -d src -d tests -d config
-    ```
+### Skip specific file types
 
-**Q: Why are my hidden files not showing?**
-*   **A:** By default, `lscat` shows hidden files in the current directory only. To show them recursively, use `-a` (e.g., `lscat -d "*" -a`).
+```bash
+lscat -d "." -sf "*.log" -sf "*.lock"
+```
 
-**Q: Does this support binary files?**
-*   **A:** `lscat` attempts to read all files as text. Binary files may produce garbled output. It is recommended to skip binary-heavy directories (e.g., `-sd images -sd bin`).
+### Combine directory and file skips
+
+```bash
+lscat -d "*" -sd node_modules -sd .git -sf "*.min.js" -sf "*.map"
+```
 
 ---
 
-## 🤝 Contributing
+## Output to File
 
-We welcome contributions to keep `lscat` and `dircat` in feature parity!
+Use `-D` to write output to a file. Color codes are automatically stripped when writing to a file, making it safe to parse or share.
 
-1.  **Fork** the repository.
-2.  **Create a feature branch** (`git checkout -b feature/AmazingFeature`).
-3.  **Ensure Parity:** If you add a feature to `lscat` (Bash), you must implement it in `dircat` (PowerShell) and vice versa.
-4.  **Commit** your changes (`git commit -m 'Add some AmazingFeature'`).
-5.  **Push** to the branch (`git push origin feature/AmazingFeature`).
-6.  **Open a Pull Request.**
+```bash
+# Single output file
+lscat -d "." -D snapshot.txt
 
----
+# Multiple output files
+lscat -d "." -D snapshot.txt -D backup.txt
 
-## 📜 License
+# Custom delimiter
+lscat -d "." -de "========" -D snapshot.txt
+```
 
-**MIT License**
+The output file is created if it does not exist and overwritten if it does. Combined with compression, this is the recommended workflow for preparing AI context:
 
-Copyright (c) 2023 [LIONEL SISSO]
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+```bash
+lscat -d "*" -sd node_modules -sd .git -C -H none -D context.txt
+```
 
 ---
 
-## 🙏 Acknowledgments
+## Examples
 
-*   **Author:** LIONEL SISSO
-*   **Version:** 1.7.2
-*   **Inspiration:** Built to bridge the gap between local file systems and AI context windows.
+### Browse the current directory
 
-**Happy Coding! 🐱‍💻**
+```bash
+lscat
+```
+
+Non-recursive tree of the current directory, including hidden files.
+
+---
+
+### Concatenate all files in the project
+
+```bash
+lscat -d "*"
+```
+
+Recursively lists and concatenates all non-hidden files.
+
+---
+
+### Process only Markdown files
+
+```bash
+lscat -f "*.md"
+```
+
+---
+
+### Process files in a subdirectory
+
+```bash
+lscat -f "docs/*.md"
+```
+
+---
+
+### Skip build artifacts and version control
+
+```bash
+lscat -d "*" -sd node_modules -sd .git -sd dist -sd build
+```
+
+---
+
+### Compact output for an AI prompt
+
+```bash
+lscat -d "*" -sd node_modules -sd .git -C -H none -D context.txt
+```
+
+Creates a flat, compressed dump of your entire project with no directory headers — ready to paste into an AI prompt.
+
+---
+
+### Include hidden files
+
+```bash
+lscat -d "." -a
+```
+
+---
+
+### Show all hidden directories recursively
+
+```bash
+lscat -d ".*"
+```
+
+---
+
+### Skip all hidden directories but include hidden files
+
+```bash
+lscat -d "*" -a -sd ".*"
+```
+
+---
+
+### Use a custom delimiter and save to file
+
+```bash
+lscat -D output.txt -de "========" -d "."
+```
+
+---
+
+### Mix files and directories
+
+```bash
+lscat -f ".gitignore" "README.md" -d src tests
+```
+
+Processes specific named files alongside full directory trees.
+
+---
+
+### Compact headers with hard compression
+
+```bash
+lscat -H ls -C -D output.txt -d "." -f "*.md"
+```
+
+Flags can be in any order.
+
+---
+
+## Tips & Best Practices
+
+**Always quote glob patterns** to prevent premature shell expansion:
+
+```bash
+lscat -f "*.js"      # correct
+lscat -f *.js        # may break depending on your shell
+```
+
+**Use `-H none -C` together** when maximising token efficiency for AI prompts. The tree header adds substantial output that you often don't need when the AI only needs to read the code.
+
+**Use `-sd` for deep skip patterns.** Because `-sd node_modules` matches at any depth, you do not need to specify the full path. A single flag handles all nested occurrences.
+
+**Use `-l` for debugging.** Line numbers make it easy to reference specific positions when discussing code with an AI or in a code review.
+
+**Use `-de` to add visual separation** when pasting multiple files into a document:
+
+```bash
+lscat -d "." -de "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
