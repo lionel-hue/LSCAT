@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
-# Version: 1.7.2 (Fixed shell expansion issues)
-# License: MIT - See LICENSE file for details
+# Version: 1.7.3
+# License: MIT
 # Repository: https://github.com/yourusername/lscat
 # =============================================================================
 
@@ -22,20 +22,20 @@ DIRECTORIES=()
 FILES=()
 CURRENT_DIR_ONLY=false
 NON_RECURSIVE=false
-POSITIONAL_DIRECTORIES=false # Flag to track if dirs were positional
+POSITIONAL_DIRECTORIES=false
 HEADER_TYPE="tree" # tree, ls, ls-R, none
 
-# ANSI color codes for better output (will be disabled when outputting to file)
+# ANSI color codes (disabled when outputting to file)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
+DIM='\033[2m'
 
-# Flag to track if we're writing to file (so we can disable colors)
 WRITING_TO_FILE=false
 
 # =============================================================================
@@ -43,94 +43,98 @@ WRITING_TO_FILE=false
 # =============================================================================
 
 print_help() {
-    # Plain text help (no ANSI codes)
-    echo "lscat - List and Concatenate Tool"
-    echo "Version: $VERSION"
-    echo ""
-    echo "DESCRIPTION:"
-    echo " Recursively lists directory structure and concatenates file contents with"
-    echo " customizable delimiters. Useful for AI analysis, documentation, or bulk"
-    echo " file processing."
-    echo ""
-    echo "USAGE:"
-    echo " $SCRIPT_NAME [OPTIONS]"
-    echo ""
-    echo " Files and directories must be specified with -f or -d flags"
-    echo ""
-    echo "OPTIONS:"
-    echo " -d, --dir DIR1 [DIR2...] Directories to process recursively"
-    echo " -d * : All non-hidden directories recursively"
-    echo " -d . : Current directory only (non-recursive)"
-    echo " Supports patterns: *, .*, migration*/"
-    echo " -f, --file FILE1 [FILE2...] Files to process (non-recursive only)"
-    echo " -f * : All non-hidden files in current directory"
-    echo " -f .* : All hidden files in current directory"
-    echo " Supports patterns: *.md, *.js, etc."
-    echo " Can specify full paths: -f client/src/app.js"
-    echo " -sd, --skip-dir PATTERN    Skip directories matching pattern (can use multiple)"
-    echo " -sf, --skip-file PATTERN   Skip files matching pattern (can use multiple)"
-    echo " Patterns match at any directory level"
-    echo " Example: -sd node_modules skips ALL node_modules dirs"
-    echo " Example: -sf *.log skips ALL .log files"
-    echo " -a, --all Include hidden files and directories"
-    echo " -D, --destination FILE Output file(s) (creates if doesn't exist)"
-    echo " -de, --delimiter CHAR Delimiter between file contents (default: \"---\")"
-    echo " -c, --compress Compress content (remove indentation and blank lines)"
-    echo " -C, --compress-hard Aggressive compression (remove all formatting, one-line per file)"
-    echo " -l, --line-numbers Show line numbers in file contents"
-    echo " -H, --header-type TYPE Change header display style: tree (default), ls, ls-R, none"
-    echo " tree: Full tree structure with branches"
-    echo " ls: Simple ls-style list (compact)"
-    echo " ls-R: Recursive ls-style list with subdir levels"
-    echo " none: No headers (for space saving)"
-    echo " -i, --install Install lscat system-wide (standalone option)"
-    echo " -h, --help Show this help message"
-    echo " -v, --version Show version information"
-    echo ""
-    echo "BEHAVIOR:"
-    echo " lscat # Non-recursive tree of current dir (shows hidden)"
-    echo " lscat -d . # Same as above (explicit)"
-    echo " lscat -d * # All directories recursively"
-    echo " lscat -f * # All files in current directory (non-recursive)"
-    echo ""
-    echo "PATTERN EXAMPLES:"
-    echo " lscat -d \"*\" # All non-hidden directories recursively"
-    echo " lscat -d \"*\" -a # All directories (including hidden) recursively"
-    echo " lscat -d . -a # Current directory only (including hidden)"
-    echo " lscat -f '*.md' # All .md files in current directory"
-    echo " lscat -f \".*\" # All hidden files in current directory"
-    echo " lscat -f 'client/src/*.js' # All .js files in client/src"
-    echo " lscat -d 'server/database/migration*/' # All migration directories"
-    echo " lscat -sf '*.log' # Skip all .log files"
-    echo " lscat -sd .git -sd node_modules # Skip .git and node_modules directories"
-    echo " lscat -sd ./client/node_modules/ # Skip specific directory path"
-    echo ""
-    echo "HEADER TYPE EXAMPLES:"
-    echo " lscat -d . -H tree # Default tree structure (verbose)"
-    echo " lscat -d . -H ls # Compact ls-style listing"
-    echo " lscat -d . -H ls-R # Recursive ls-style listing"
-    echo " lscat -d * -c -H ls # Compact headers with compressed content"
-    echo " lscat -d * -C -H ls # Hard compression with compact headers"
-    echo " lscat -d * -C -H none # No headers with hard compression (max space saving)"
-    echo ""
-    echo "EXAMPLES:"
-    echo " $SCRIPT_NAME # Non-recursive list of current directory"
-    echo " $SCRIPT_NAME -d \"*\" -a -sd .* # All non-hidden recursively (skip hidden dirs)"
-    echo " $SCRIPT_NAME -D output.txt -de \"***\" # Use custom delimiter, output to file"
-    echo " $SCRIPT_NAME -a -c -l # Include hidden files, compress, line numbers"
-    echo " $SCRIPT_NAME -f *.md -d client server # Process .md files and client/server directories"
-    echo " $SCRIPT_NAME -f .gitignore readme.md -d src # Mix specific files and directories"
-    echo " $SCRIPT_NAME -H ls -C -D output.txt -d . -f *.md # Mixed flag order example"
-    echo ""
-    echo "NOTES:"
-    echo " - Use quotes around patterns to prevent shell expansion"
-    echo " - Skip patterns prevent BOTH tree display AND file processing"
-    echo " - Skip patterns match at any depth (e.g., -sd node_modules skips all node_modules)"
-    echo " - -d flag is for directories only (recursive with *)"
-    echo " - -f flag is for files only (non-recursive, current directory only)"
-    echo " - -H flag reduces header size when combining -d with -C or -c"
-    echo " - Flags can be in any order: lscat -H ls -C -D output.txt -d . -f *.md"
-    echo " - Default (no flags): non-recursive tree of current dir, shows hidden"
+    local W='\033[1;37m'   # bright white
+    local G='\033[0;32m'   # green
+    local Y='\033[1;33m'   # yellow
+    local C='\033[0;36m'   # cyan
+    local M='\033[0;35m'   # magenta
+    local B='\033[0;34m'   # blue
+    local D='\033[2m'      # dim
+    local N='\033[0m'      # reset
+    local BOLD='\033[1m'
+
+    echo -e ""
+    echo -e "  ${BOLD}${W}┌─────────────────────────────────────────────────────────────┐${N}"
+    echo -e "  ${BOLD}${W}│${N}  ${BOLD}${C}lscat${N} ${D}v${VERSION}${N}  ${D}─  List & Concatenate Files for Humans & AI${N}   ${BOLD}${W}│${N}"
+    echo -e "  ${BOLD}${W}└─────────────────────────────────────────────────────────────┘${N}"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}USAGE${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${W}lscat${N} ${G}[OPTIONS]${N}"
+    echo -e "    ${D}Files and directories must be specified with -f or -d flags${N}"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}QUICK START${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${C}lscat${N}                     ${D}# Tree of current directory${N}"
+    echo -e "    ${C}lscat -d .${N}                ${D}# Same (explicit)${N}"
+    echo -e "    ${C}lscat -d \"*\"${N}              ${D}# All directories recursively${N}"
+    echo -e "    ${C}lscat -f \"*\"${N}              ${D}# All files in current directory${N}"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}INPUT OPTIONS${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${G}-d, --dir${N}   ${W}DIR [DIR...]${N}    Directories to process (recursive)"
+    echo -e "    ${G}-f, --file${N}  ${W}FILE [FILE...]${N}  Files to process (non-recursive)"
+    echo -e "    ${G}-a, --all${N}                   Include hidden files and directories"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}OUTPUT OPTIONS${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${G}-D, --destination${N}  ${W}FILE${N}    Write output to file(s)"
+    echo -e "    ${G}-de, --delimiter${N}   ${W}STR${N}     Delimiter between files ${D}(default: \"---\")${N}"
+    echo -e "    ${G}-l, --line-numbers${N}          Show line numbers in file contents"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}COMPRESSION${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${G}-c, --compress${N}              Remove indentation and blank lines"
+    echo -e "    ${G}-C, --compress-hard${N}         Aggressive: one line per file, strip all formatting"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}FILTERING${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${G}-sd, --skip-dir${N}   ${W}PATTERN${N}  Skip directories matching pattern"
+    echo -e "    ${G}-sf, --skip-file${N}  ${W}PATTERN${N}  Skip files matching pattern"
+    echo -e "    ${D}  Patterns match at any depth — e.g. -sd node_modules skips ALL node_modules${N}"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}HEADER STYLE${N}  ${D}(-H / --header-type)${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${M}tree${N}   ${D}(default)${N}  Full tree with branch connectors"
+    echo -e "    ${M}ls${N}               Compact flat listing"
+    echo -e "    ${M}ls-R${N}             Recursive ls-style with indented sublevels"
+    echo -e "    ${M}none${N}             No headers — maximum space saving"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}OTHER${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${G}-i, --install${N}               Install lscat system-wide"
+    echo -e "    ${G}-h, --help${N}                  Show this help message"
+    echo -e "    ${G}-v, --version${N}               Show version info"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}EXAMPLES${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${C}lscat -d \"*\" -a -sd \".*\"${N}              ${D}# All dirs, skip hidden${N}"
+    echo -e "    ${C}lscat -f \"*.md\"${N}                        ${D}# All markdown files${N}"
+    echo -e "    ${C}lscat -d . -sd node_modules -sd .git${N}   ${D}# Skip common noise dirs${N}"
+    echo -e "    ${C}lscat -D out.txt -de \"***\" -d .${N}        ${D}# Custom delimiter, save to file${N}"
+    echo -e "    ${C}lscat -H ls -C -D out.txt -d . -f \"*.md\"${N}  ${D}# Mixed flags, hard compress${N}"
+    echo -e "    ${C}lscat -d \"*\" -C -H none${N}                ${D}# Max compression for AI context${N}"
+    echo -e ""
+
+    echo -e "  ${BOLD}${Y}PATTERN MATCHING${N}"
+    echo -e "  ${D}──────────────────────────────────────────────${N}"
+    echo -e "    ${D}Always quote patterns to prevent shell expansion:${N}"
+    echo -e "    ${C}lscat -d \"migration*/\"${N}     ${D}# All migration* directories${N}"
+    echo -e "    ${C}lscat -f \"client/src/*.js\"${N}  ${D}# .js files in a subdirectory${N}"
+    echo -e "    ${C}lscat -f \".*\"${N}              ${D}# Hidden files only${N}"
+    echo -e ""
+
+    echo -e "  ${D}Tip: Use ${N}${C}lscat -d \"*\" -C -H none -D ctx.txt${N}${D} to pack a whole project for an AI prompt.${N}"
+    echo -e ""
 }
 
 print_version() {
@@ -172,11 +176,9 @@ install_lscat() {
     echo "Installing lscat..."
     echo "====================="
     
-    # Get the script's own location
     if [[ -f "$0" ]]; then
         SCRIPT_PATH="$0"
     else
-        # Fallback to the current script
         SCRIPT_PATH="./$(basename "$0")"
     fi
     
@@ -185,7 +187,6 @@ install_lscat() {
         exit 1
     fi
     
-    # Make sure the script is executable
     chmod +x "$SCRIPT_PATH" 2>/dev/null || true
     
     echo ""
@@ -201,13 +202,10 @@ install_lscat() {
     
     case $choice in
         1)
-            # User installation
             mkdir -p ~/.local/bin
             if cp "$SCRIPT_PATH" ~/.local/bin/lscat; then
                 chmod +x ~/.local/bin/lscat
                 echo "Installed to ~/.local/bin/lscat"
-                
-                # Check if PATH needs update
                 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
                     echo "Adding ~/.local/bin to PATH..."
                     echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
@@ -220,7 +218,6 @@ install_lscat() {
             fi
             ;;
         2)
-            # System installation to /usr/local/bin
             if sudo cp "$SCRIPT_PATH" /usr/local/bin/lscat; then
                 sudo chmod +x /usr/local/bin/lscat
                 echo "Installed to /usr/local/bin/lscat"
@@ -230,7 +227,6 @@ install_lscat() {
             fi
             ;;
         3)
-            # System installation to /usr/bin
             if sudo cp "$SCRIPT_PATH" /usr/bin/lscat; then
                 sudo chmod +x /usr/bin/lscat
                 echo "Installed to /usr/bin/lscat"
@@ -240,7 +236,6 @@ install_lscat() {
             fi
             ;;
         4)
-            # Custom symlink method
             read -p "Enter installation directory (e.g., /opt/lscat): " install_dir
             if [[ -z "$install_dir" ]]; then
                 print_error "No directory specified"
@@ -251,7 +246,6 @@ install_lscat() {
             
             if cp "$SCRIPT_PATH" "$install_dir/lscat"; then
                 chmod +x "$install_dir/lscat"
-                
                 read -p "Create symlink in which directory? (e.g., /usr/local/bin): " symlink_dir
                 if [[ -n "$symlink_dir" ]]; then
                     sudo ln -sf "$install_dir/lscat" "$symlink_dir/lscat" 2>/dev/null || \
@@ -275,7 +269,6 @@ install_lscat() {
             ;;
     esac
     
-    # Verify installation
     echo ""
     echo "Verifying installation..."
     if command -v lscat &> /dev/null; then
@@ -295,18 +288,14 @@ expand_patterns() {
     local expanded_items=()
     
     for item in "${items[@]}"; do
-        # Special cases
         if [[ "$item" == "*" ]]; then
-            # * means all non-hidden directories recursively
             if [[ "$INCLUDE_HIDDEN" == true ]]; then
-                # Include hidden directories
                 while IFS= read -r -d $'\0' found_item; do
                     if [[ -d "$found_item" ]]; then
                         expanded_items+=("$found_item")
                     fi
                 done < <(find . -mindepth 1 -type d -print0 2>/dev/null)
             else
-                # Exclude hidden directories
                 while IFS= read -r -d $'\0' found_item; do
                     if [[ -d "$found_item" ]] && [[ ! "$found_item" =~ /\. ]]; then
                         expanded_items+=("$found_item")
@@ -314,29 +303,21 @@ expand_patterns() {
                 done < <(find . -mindepth 1 -type d -not -name '.*' -print0 2>/dev/null)
             fi
         elif [[ "$item" == "." ]] && [[ "$POSITIONAL_DIRECTORIES" == false ]]; then
-            # . with -d flag means current directory only (non-recursive)
             expanded_items+=(".")
         elif [[ "$item" == ".*" ]]; then
-            # .* means hidden directories recursively
             while IFS= read -r -d $'\0' found_item; do
                 if [[ -d "$found_item" ]]; then
                     expanded_items+=("$found_item")
                 fi
             done < <(find . -mindepth 1 -type d -name '.*' -print0 2>/dev/null)
         elif [[ "$item" == *"*"* ]] || [[ "$item" == *"?"* ]] || [[ "$item" == *"["* ]]; then
-            # Contains wildcard pattern - directories only
-            # First, check if it's a literal directory that exists
             if [[ -d "$item" ]]; then
-                # It exists as a literal directory
                 expanded_items+=("$item")
             else
-                # Try to expand with shell globbing (with nullglob to avoid literal pattern)
                 shopt -s nullglob
                 local found_items=()
                 
-                # Try with current directory if no directory specified
                 if [[ "$item" != */* ]] && [[ "$item" != ./* ]]; then
-                    # Pattern without path - try in current directory
                     for found_item in ./$item; do
                         if [[ -d "$found_item" ]]; then
                             found_items+=("$found_item")
@@ -344,7 +325,6 @@ expand_patterns() {
                     done
                 fi
                 
-                # Try the pattern as-is
                 for found_item in $item; do
                     if [[ -d "$found_item" ]]; then
                         found_items+=("$found_item")
@@ -353,21 +333,17 @@ expand_patterns() {
                 shopt -u nullglob
                 
                 if [[ ${#found_items[@]} -eq 0 ]]; then
-                    # If no matches with shell globbing, try find for more complex patterns
                     local pattern_name=$(basename "$item")
                     local pattern_dir=$(dirname "$item")
                     [[ "$pattern_dir" == "." ]] && pattern_dir="."
                     
-                    # Handle directory patterns like migration*/
                     if [[ "$item" == */ ]]; then
-                        # Directory pattern
                         while IFS= read -r -d $'\0' found_item; do
                             if [[ -d "$found_item" ]]; then
                                 found_items+=("$found_item")
                             fi
                         done < <(find "$pattern_dir" -type d -name "$pattern_name" -print0 2>/dev/null)
                     else
-                        # General pattern (directories only)
                         while IFS= read -r -d $'\0' found_item; do
                             if [[ -d "$found_item" ]]; then
                                 found_items+=("$found_item")
@@ -376,13 +352,11 @@ expand_patterns() {
                     fi
                 fi
                 
-                # Add found items
                 for found_item in "${found_items[@]}"; do
                     expanded_items+=("$found_item")
                 done
             fi
         else
-            # No pattern, check if it's a directory
             if [[ -d "$item" ]]; then
                 expanded_items+=("$item")
             elif [[ -e "$item" ]]; then
@@ -394,7 +368,6 @@ expand_patterns() {
         fi
     done
     
-    # Remove duplicates and empty entries
     local unique_items=()
     for item in "${expanded_items[@]}"; do
         if [[ -n "$item" ]] && [[ ! " ${unique_items[@]} " =~ " $item " ]]; then
@@ -402,7 +375,6 @@ expand_patterns() {
         fi
     done
     
-    # Output each item on a new line
     for item in "${unique_items[@]}"; do
         echo "$item"
     done
@@ -414,18 +386,14 @@ expand_file_patterns() {
     local expanded_items=()
     
     for item in "${items[@]}"; do
-        # Special cases
         if [[ "$item" == "*" ]]; then
-            # * means all non-hidden files in current directory (non-recursive)
             if [[ "$INCLUDE_HIDDEN" == true ]]; then
-                # Include hidden files
                 while IFS= read -r -d $'\0' found_item; do
                     if [[ -f "$found_item" ]]; then
                         expanded_items+=("$found_item")
                     fi
                 done < <(find . -maxdepth 1 -mindepth 1 -type f -print0 2>/dev/null)
             else
-                # Exclude hidden files
                 while IFS= read -r -d $'\0' found_item; do
                     if [[ -f "$found_item" ]]; then
                         expanded_items+=("$found_item")
@@ -433,20 +401,17 @@ expand_file_patterns() {
                 done < <(find . -maxdepth 1 -mindepth 1 -type f -not -name '.*' -print0 2>/dev/null)
             fi
         elif [[ "$item" == ".*" ]]; then
-            # .* means hidden files in current directory
             while IFS= read -r -d $'\0' found_item; do
                 if [[ -f "$found_item" ]]; then
                     expanded_items+=("$found_item")
                 fi
             done < <(find . -maxdepth 1 -mindepth 1 -type f -name '.*' -print0 2>/dev/null)
         elif [[ "$item" == *"*"* ]] || [[ "$item" == *"?"* ]] || [[ "$item" == *"["* ]]; then
-            # Contains wildcard pattern - files only, non-recursive
             local pattern_name=$(basename "$item")
             local pattern_dir=$(dirname "$item")
             [[ "$pattern_dir" == "." ]] && pattern_dir="."
             
             if [[ -d "$pattern_dir" ]] || [[ "$pattern_dir" == "" ]]; then
-                # Use find with maxdepth 1 for non-recursive search
                 if [[ "$INCLUDE_HIDDEN" == true ]]; then
                     while IFS= read -r -d $'\0' found_item; do
                         if [[ -f "$found_item" ]]; then
@@ -462,7 +427,6 @@ expand_file_patterns() {
                 fi
             fi
         else
-            # No pattern, check if it's a file
             if [[ -f "$item" ]]; then
                 expanded_items+=("$item")
             elif [[ -e "$item" ]]; then
@@ -473,7 +437,6 @@ expand_file_patterns() {
         fi
     done
     
-    # Remove duplicates and empty entries
     local unique_items=()
     for item in "${expanded_items[@]}"; do
         if [[ -n "$item" ]] && [[ ! " ${unique_items[@]} " =~ " $item " ]]; then
@@ -481,32 +444,24 @@ expand_file_patterns() {
         fi
     done
     
-    # Output each item on a new line
     for item in "${unique_items[@]}"; do
         echo "$item"
     done
 }
 
-# Enhanced should_skip_dir with better directory handling
 should_skip_dir() {
     local item="$1"
     local item_name=$(basename "$item")
     
     for pattern in "${SKIP_DIRS[@]}"; do
-        # Remove trailing / if present
         pattern="${pattern%/}"
-        
-        # Skip empty patterns
         [[ -z "$pattern" ]] && continue
         
-        # 1. Check exact match
         if [[ "$item" == "$pattern" ]] || [[ "$item_name" == "$pattern" ]]; then
             return 0
         fi
         
-        # 2. Check if pattern contains wildcards
         if [[ "$pattern" == *"*"* ]] || [[ "$pattern" == *"?"* ]] || [[ "$pattern" == *"["* ]]; then
-            # Use case pattern matching
             case "$item" in
                 $pattern) return 0 ;;
             esac
@@ -515,18 +470,13 @@ should_skip_dir() {
             esac
         fi
         
-        # 3. Check for directory path matching (e.g., ./client/node_modules)
-        # Remove leading ./ if present for better matching
         local clean_pattern="${pattern#./}"
         local clean_item="${item#./}"
         
         if [[ "$clean_item" == "$clean_pattern"* ]]; then
-            # If pattern ends with a directory name and item is under that directory
             return 0
         fi
         
-        # 4. Check if item is inside a skipped directory
-        # For each segment of the item path, check if it matches a skip pattern
         local temp_path="$clean_item"
         while [[ "$temp_path" != "." ]] && [[ "$temp_path" != "" ]]; do
             local current_dir="$(basename "$temp_path")"
@@ -544,26 +494,19 @@ should_skip_dir() {
     return 1
 }
 
-# Enhanced should_skip_file with better file handling
 should_skip_file() {
     local item="$1"
     local item_name=$(basename "$item")
     
     for pattern in "${SKIP_FILES[@]}"; do
-        # Remove trailing / if present
         pattern="${pattern%/}"
-        
-        # Skip empty patterns
         [[ -z "$pattern" ]] && continue
         
-        # 1. Check exact match
         if [[ "$item" == "$pattern" ]] || [[ "$item_name" == "$pattern" ]]; then
             return 0
         fi
         
-        # 2. Check if pattern contains wildcards
         if [[ "$pattern" == *"*"* ]] || [[ "$pattern" == *"?"* ]] || [[ "$pattern" == *"["* ]]; then
-            # Use case pattern matching
             case "$item" in
                 $pattern) return 0 ;;
             esac
@@ -572,18 +515,13 @@ should_skip_file() {
             esac
         fi
         
-        # 3. Check for file path matching
-        # Remove leading ./ if present for better matching
         local clean_pattern="${pattern#./}"
         local clean_item="${item#./}"
         
         if [[ "$clean_item" == "$clean_pattern"* ]]; then
-            # If pattern matches the file path
             return 0
         fi
         
-        # 4. Check if file is inside a skipped directory
-        # For each segment of the item path, check if it matches a skip pattern
         local temp_path="$(dirname "$clean_item")"
         while [[ "$temp_path" != "." ]] && [[ "$temp_path" != "" ]] && [[ "$temp_path" != "/" ]]; do
             local current_dir="$(basename "$temp_path")"
@@ -601,10 +539,8 @@ should_skip_file() {
     return 1
 }
 
-# Combined should_skip for backward compatibility (checks both dirs and files)
 should_skip() {
     local item="$1"
-    
     if [[ -d "$item" ]]; then
         should_skip_dir "$item"
         return $?
@@ -614,7 +550,6 @@ should_skip() {
     fi
 }
 
-# Normal compression - remove indentation and blank lines
 compress_content() {
     local content="$1"
     
@@ -623,41 +558,29 @@ compress_content() {
         return
     fi
     
-    # If hard compression is enabled, use that instead
     if [[ "$COMPRESS_HARD" == true ]]; then
         compress_hard_content "$content"
         return
     fi
     
-    # Original compression: remove leading/trailing whitespace and empty lines
     echo "$content" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'
 }
 
-# Hard compression - remove ALL formatting, make each file one continuous line
 compress_hard_content() {
     local content="$1"
     
-    # First, remove all trailing/leading whitespace from each line
     content=$(echo "$content" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    
-    # Remove completely empty lines
     content=$(echo "$content" | sed -e '/^$/d')
     
-    # Join lines with a single space, but be careful with certain patterns
     local result=""
     local in_multiline_comment=false
-    local in_string=false
-    local string_char=""
     
-    # FIX: Define regex variables to avoid syntax errors with < > characters in conditionals
     local regex_open='[\({\[<]'
     local regex_close='[.,;:!?\)}\]>]'
     
     while IFS= read -r line; do
-        # Skip empty lines
         [[ -z "$line" ]] && continue
         
-        # Handle multiline comments
         if [[ "$in_multiline_comment" == true ]]; then
             if [[ "$line" == *"*/"* ]]; then
                 in_multiline_comment=false
@@ -666,7 +589,6 @@ compress_hard_content() {
             continue
         fi
         
-        # Check if line starts a multiline comment
         if [[ "$line" == "/*"* ]] && [[ "$line" != *"*/"* ]]; then
             in_multiline_comment=true
             result="${result}${line} "
@@ -677,7 +599,6 @@ compress_hard_content() {
             local last_char="${result: -1}"
             local first_char="${line:0:1}"
             
-            # Use defined variables for pattern matching
             if [[ "$last_char" =~ $regex_open ]] || [[ "$first_char" =~ $regex_close ]]; then
                 result="${result}${line} "
             else
@@ -688,7 +609,6 @@ compress_hard_content() {
         fi
     done <<< "$content"
     
-    # Clean up: remove trailing space and collapse multiple spaces
     result=$(echo "$result" | sed -e 's/[[:space:]]*$//' -e 's/[[:space:]]\+/ /g')
     
     if [[ ${#result} -gt 1000 ]] && [[ "$WRITING_TO_FILE" == false ]]; then
@@ -698,7 +618,6 @@ compress_hard_content() {
     echo "$result"
 }
 
-# Enhanced get_tree_structure with proper skip handling
 get_tree_structure() {
     local dir="$1"
     local depth="${2:-0}"
@@ -707,12 +626,10 @@ get_tree_structure() {
     local parent_is_hidden="${5:-false}"
     local force_show_hidden="${6:-false}"
     
-    # Apply non-recursive flag
     if [[ "$NON_RECURSIVE" == true ]]; then
         recursive=false
     fi
     
-    # Skip entire directory if it matches skip patterns
     if should_skip_dir "$dir"; then
         if [[ $depth -eq 0 ]]; then
             if [[ "$WRITING_TO_FILE" == false ]]; then
@@ -726,18 +643,15 @@ get_tree_structure() {
         return
     fi
     
-    # Check if current directory is hidden (starts with .)
     local dir_name=$(basename "$dir")
     local is_current_hidden=false
     [[ "$dir_name" == .* ]] && is_current_hidden=true
     
-    # Determine if we should show this directory
     if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && \
        [[ "$is_current_hidden" == true ]] && [[ "$parent_is_hidden" == false ]]; then
         return
     fi
     
-    # Print current directory
     if [[ $depth -eq 0 ]]; then
         if [[ "$WRITING_TO_FILE" == false ]]; then
             echo -e "${BOLD}${BLUE}📁 $dir${NC}"
@@ -748,9 +662,7 @@ get_tree_structure() {
         echo "${prefix}📁 $dir_name/"
     fi
     
-    # Find items in directory
     local find_opts="-maxdepth 1"
-    
     local find_cmd="find \"$dir\" $find_opts -mindepth 1"
     
     if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]]; then
@@ -766,13 +678,11 @@ get_tree_structure() {
     local count=0
     local total_items=0
     
-    # First, count total items
     while IFS= read -r item; do
         [[ -z "$item" ]] && continue
         total_items=$((total_items + 1))
     done < <(eval "$find_cmd 2>/dev/null")
     
-    # Process items
     while IFS= read -r item; do
         [[ -z "$item" ]] && continue
         
@@ -780,7 +690,6 @@ get_tree_structure() {
         local is_item_hidden=false
         [[ "$item_name" == .* ]] && is_item_hidden=true
         
-        # Skip if pattern matches
         if [[ -d "$item" ]]; then
             if should_skip_dir "$item"; then
                 continue
@@ -791,7 +700,6 @@ get_tree_structure() {
             fi
         fi
         
-        # Skip hidden items if INCLUDE_HIDDEN is false and not forcing show hidden
         if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && \
            [[ "$is_item_hidden" == true ]] && [[ "$is_current_hidden" == false ]]; then
             continue
@@ -799,7 +707,6 @@ get_tree_structure() {
         
         count=$((count + 1))
         
-        # Determine if last item for pretty tree
         local next_prefix="$prefix"
         if [[ $count -eq $total_items ]]; then
             next_prefix="${prefix}  "
@@ -816,12 +723,10 @@ get_tree_structure() {
                 echo "$item_name/"
             fi
             
-            # Only recurse if recursive flag is true and not skipping
             if [[ "$recursive" == true ]] && ! should_skip_dir "$item"; then
                 get_tree_structure "$item" $((depth + 1)) "$next_prefix" "$recursive" "$is_current_hidden" "$force_show_hidden"
             fi
         else
-            # Color code by file extension
             local ext="${item_name##*.}"
             if [[ "$WRITING_TO_FILE" == false ]]; then
                 if [[ "$ext" == "$item_name" ]]; then
@@ -848,7 +753,6 @@ get_tree_structure() {
     fi
 }
 
-# NEW: Get ls-style structure (compact, no tree branches)
 get_ls_structure() {
     local dir="$1"
     local depth="${2:-0}"
@@ -856,12 +760,10 @@ get_ls_structure() {
     local parent_is_hidden="${4:-false}"
     local force_show_hidden="${5:-false}"
     
-    # Apply non-recursive flag
     if [[ "$NON_RECURSIVE" == true ]]; then
         recursive=false
     fi
     
-    # Skip entire directory if it matches skip patterns
     if should_skip_dir "$dir"; then
         if [[ $depth -eq 0 ]]; then
             if [[ "$WRITING_TO_FILE" == false ]]; then
@@ -873,18 +775,15 @@ get_ls_structure() {
         return
     fi
     
-    # Check if current directory is hidden (starts with .)
     local dir_name=$(basename "$dir")
     local is_current_hidden=false
     [[ "$dir_name" == .* ]] && is_current_hidden=true
     
-    # Determine if we should show this directory
     if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && \
        [[ "$is_current_hidden" == true ]] && [[ "$parent_is_hidden" == false ]]; then
         return
     fi
     
-    # Print current directory (with indentation for subdirectories in ls-R mode)
     local indent=""
     if [[ $depth -gt 0 ]] && [[ "$HEADER_TYPE" == "ls-R" ]]; then
         for ((i=0; i<depth; i++)); do
@@ -899,12 +798,7 @@ get_ls_structure() {
         fi
     fi
     
-    # Find items in directory
     local find_opts="-maxdepth 1"
-    if [[ "$recursive" == false ]]; then
-        find_opts="-maxdepth 1"
-    fi
-    
     local find_cmd="find \"$dir\" $find_opts -mindepth 1"
     
     if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]]; then
@@ -917,7 +811,6 @@ get_ls_structure() {
     
     find_cmd="$find_cmd | sort"
     
-    # Process files and directories separately for better organization
     local files=()
     local subdirs=()
     
@@ -928,7 +821,6 @@ get_ls_structure() {
         local is_item_hidden=false
         [[ "$item_name" == .* ]] && is_item_hidden=true
         
-        # Skip if pattern matches
         if [[ -d "$item" ]]; then
             if should_skip_dir "$item"; then
                 continue
@@ -939,7 +831,6 @@ get_ls_structure() {
             fi
         fi
         
-        # Skip hidden items if INCLUDE_HIDDEN is false and not forcing show hidden
         if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && \
            [[ "$is_item_hidden" == true ]] && [[ "$is_current_hidden" == false ]]; then
             continue
@@ -952,12 +843,9 @@ get_ls_structure() {
         fi
     done < <(eval "$find_cmd 2>/dev/null")
     
-    # Print files first
     for item in "${files[@]}"; do
         local item_name=$(basename "$item")
         local ext="${item_name##*.}"
-        
-        # Add indentation for subdirectories in ls-R mode
         local item_indent="$indent"
         if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -gt 0 ]]; then
             item_indent="${item_indent}  "
@@ -982,7 +870,6 @@ get_ls_structure() {
         fi
     done
     
-    # Print directories
     for item in "${subdirs[@]}"; do
         local item_name=$(basename "$item")
         local item_indent="$indent"
@@ -996,13 +883,11 @@ get_ls_structure() {
             echo "${item_indent}$item_name/"
         fi
         
-        # Recurse into subdirectories if recursive flag is true and not skipping
         if [[ "$recursive" == true ]] && [[ "$HEADER_TYPE" == "ls-R" ]] && ! should_skip_dir "$item"; then
             get_ls_structure "$item" $((depth + 1)) "$recursive" "$is_current_hidden" "$force_show_hidden"
         fi
     done
     
-    # Print empty message if no items
     if [[ ${#files[@]} -eq 0 ]] && [[ ${#subdirs[@]} -eq 0 ]]; then
         if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -gt 0 ]]; then
             echo "${indent} (empty)"
@@ -1011,13 +896,11 @@ get_ls_structure() {
         fi
     fi
     
-    # Add a blank line between directories in ls-R mode for readability
     if [[ "$HEADER_TYPE" == "ls-R" ]] && [[ $depth -eq 0 ]] && [[ ${#subdirs[@]} -gt 0 ]]; then
         echo ""
     fi
 }
 
-# Process file content with options
 process_file_content() {
     local file="$1"
     
@@ -1056,7 +939,6 @@ process_file_content() {
     fi
 }
 
-# Enhanced process_directory with HEADER_TYPE support
 process_directory() {
     local dir="$1"
     local dir_name=$(basename "$dir")
@@ -1064,7 +946,6 @@ process_directory() {
     [[ "$dir_name" == .* ]] && is_dir_hidden=true
     local force_show_hidden="${2:-false}"
     
-    # Skip entire directory if it matches skip patterns
     if should_skip_dir "$dir"; then
         print_info "Skipping entire directory: $dir"
         return
@@ -1075,7 +956,6 @@ process_directory() {
         return
     fi
     
-    # Skip header if HEADER_TYPE is "none"
     if [[ "$HEADER_TYPE" != "none" ]]; then
         if [[ "$WRITING_TO_FILE" == false ]]; then
             echo -e "\n${BOLD}${MAGENTA}═══════════════════════════════════════════════════${NC}"
@@ -1087,13 +967,11 @@ process_directory() {
             echo "═══════════════════════════════════════════════════\n"
         fi
         
-        # Determine recursion
         local recursive=true
         if [[ "$NON_RECURSIVE" == true ]] && [[ "$dir" == "." ]]; then
             recursive=false
         fi
         
-        # Use appropriate header display based on HEADER_TYPE
         case "$HEADER_TYPE" in
             "tree")
                 get_tree_structure "$dir" 0 "" "$recursive" false "$force_show_hidden"
@@ -1107,7 +985,6 @@ process_directory() {
         esac
     fi
     
-    # Process file contents
     local show_file_contents=false
     if [[ "$INCLUDE_HIDDEN" == true ]] || [[ ${#SKIP_DIRS[@]} -gt 0 ]] || [[ ${#SKIP_FILES[@]} -gt 0 ]] || \
        [[ ${#OUTPUT_FILES[@]} -gt 0 ]] || [[ "$COMPRESS" == true ]] || \
@@ -1132,7 +1009,6 @@ process_directory() {
         
         local find_cmd="find \"$dir\" -type f"
         
-        # Apply recursion limit for non-recursive mode
         if [[ "$NON_RECURSIVE" == true ]] && [[ "$dir" == "." ]]; then
             find_cmd="$find_cmd -maxdepth 1"
         fi
@@ -1152,12 +1028,12 @@ process_directory() {
             [[ -z "$file" ]] && continue
             
             if should_skip_file "$file"; then
-                continue;
+                continue
             fi
             
             local file_name=$(basename "$file")
             if [[ "$force_show_hidden" == false ]] && [[ "$INCLUDE_HIDDEN" == false ]] && [[ "$file_name" == .* ]]; then
-                continue;
+                continue
             fi
             
             process_file_content "$file"
@@ -1172,7 +1048,6 @@ process_directory() {
     fi
 }
 
-# Process single file
 process_single_file() {
     local file="$1"
     
@@ -1215,21 +1090,12 @@ process_single_file() {
 # Main Argument Parsing
 # =============================================================================
 
-# Handle install flag separately
 if [[ $# -eq 1 ]] && ([[ "$1" == "-i" ]] || [[ "$1" == "--install" ]]); then
     install_lscat
 fi
 
-# Store all arguments
 ALL_ARGS=("$@")
 
-# Debug: print all arguments
-# echo "DEBUG: Number of arguments: ${#ALL_ARGS[@]}" >&2
-# for i in "${!ALL_ARGS[@]}"; do
-#     echo "DEBUG: Argument $i: '${ALL_ARGS[$i]}'" >&2
-# done
-
-# Parse arguments with robust handling for shell expansion
 i=0
 while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
     arg="${ALL_ARGS[$i]}"
@@ -1245,42 +1111,34 @@ while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
             ;;
         -d|--dir)
             ((i++))
-            # Collect all directory arguments until next flag or end of array
             while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
                 DIRECTORIES+=("${ALL_ARGS[$i]}")
                 ((i++))
             done
-            # Decrement i to reprocess the next flag
             ((i--))
             ;;
         -f|--file)
             ((i++))
-            # Collect all file arguments until next flag or end of array
             while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
                 FILES+=("${ALL_ARGS[$i]}")
                 ((i++))
             done
-            # Decrement i to reprocess the next flag
             ((i--))
             ;;
         -sd|--skip-dir)
             ((i++))
-            # Collect all skip dir arguments until next flag or end of array
             while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
                 SKIP_DIRS+=("${ALL_ARGS[$i]}")
                 ((i++))
             done
-            # Decrement i to reprocess the next flag
             ((i--))
             ;;
         -sf|--skip-file)
             ((i++))
-            # Collect all skip file arguments until next flag or end of array
             while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
                 SKIP_FILES+=("${ALL_ARGS[$i]}")
                 ((i++))
             done
-            # Decrement i to reprocess the next flag
             ((i--))
             ;;
         -a|--all)
@@ -1288,12 +1146,10 @@ while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
             ;;
         -D|--destination)
             ((i++))
-            # Collect output file arguments
             while [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; do
                 OUTPUT_FILES+=("${ALL_ARGS[$i]}")
                 ((i++))
             done
-            # Decrement i to reprocess the next flag
             ((i--))
             ;;
         -de|--delimiter)
@@ -1319,10 +1175,8 @@ while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
             ((i++))
             if [[ $i -lt ${#ALL_ARGS[@]} ]] && [[ ! "${ALL_ARGS[$i]}" =~ ^- ]]; then
                 HEADER_TYPE="${ALL_ARGS[$i]}"
-                # Validate header type
                 case "$HEADER_TYPE" in
                     "tree"|"ls"|"ls-R"|"none")
-                        # Valid, do nothing
                         ;;
                     *)
                         print_error "Invalid header type: $HEADER_TYPE. Use tree, ls, ls-R, or none"
@@ -1339,10 +1193,7 @@ while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
             exit 1
             ;;
         --)
-            # End of options
             ((i++))
-            # Anything after -- should be treated as file/directory arguments
-            # But since we don't support positional arguments, we'll treat them as files
             while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
                 FILES+=("${ALL_ARGS[$i]}")
                 ((i++))
@@ -1354,7 +1205,6 @@ while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
             exit 1
             ;;
         *)
-            # Positional arguments are no longer supported
             print_error "Positional arguments are not supported. Use -d for directories or -f for files."
             print_error "Example: lscat -d . or lscat -f *.md"
             print_error "Found argument: $arg"
@@ -1365,103 +1215,66 @@ while [[ $i -lt ${#ALL_ARGS[@]} ]]; do
     ((i++))
 done
 
-# Handle default case (no arguments)
 if [[ ${#DIRECTORIES[@]} -eq 0 ]] && [[ ${#FILES[@]} -eq 0 ]]; then
     DIRECTORIES=(".")
     POSITIONAL_DIRECTORIES=true
 fi
 
-# Debug: show what we received
-# echo "DEBUG: Raw DIRECTORIES: ${DIRECTORIES[@]}" >&2
-# echo "DEBUG: Raw FILES: ${FILES[@]}" >&2
-# echo "DEBUG: Raw SKIP_DIRS: ${SKIP_DIRS[@]}" >&2
-# echo "DEBUG: Raw SKIP_FILES: ${SKIP_FILES[@]}" >&2
-
-# Expand patterns in all arrays that support them
 if [[ ${#DIRECTORIES[@]} -gt 0 ]]; then
-    # Create temporary array for expanded directories
     temp_dirs=()
     for dir in "${DIRECTORIES[@]}"; do
-        # Use mapfile to handle multi-line output from expand_patterns
         while IFS= read -r expanded_item; do
             if [[ -n "$expanded_item" ]]; then
                 temp_dirs+=("$expanded_item")
             fi
         done < <(expand_patterns "$dir")
     done
-    # Update DIRECTORIES with expanded items
     DIRECTORIES=("${temp_dirs[@]}")
 fi
 
 if [[ ${#FILES[@]} -gt 0 ]]; then
-    # Create temporary array for expanded files
     temp_files=()
     for file in "${FILES[@]}"; do
-        # Use mapfile to handle multi-line output from expand_file_patterns
         while IFS= read -r expanded_item; do
             if [[ -n "$expanded_item" ]]; then
                 temp_files+=("$expanded_item")
             fi
         done < <(expand_file_patterns "$file")
     done
-    # Update FILES with expanded items
     FILES=("${temp_files[@]}")
 fi
 
 if [[ ${#SKIP_DIRS[@]} -gt 0 ]]; then
-    # Create temporary array for expanded skip dirs
     temp_skip_dirs=()
     for pattern in "${SKIP_DIRS[@]}"; do
-        # Use mapfile to handle multi-line output from expand_patterns
         while IFS= read -r expanded_item; do
             if [[ -n "$expanded_item" ]]; then
                 temp_skip_dirs+=("$expanded_item")
             fi
         done < <(expand_patterns "$pattern")
     done
-    # Update SKIP_DIRS with expanded items
     SKIP_DIRS=("${temp_skip_dirs[@]}")
 fi
 
 if [[ ${#SKIP_FILES[@]} -gt 0 ]]; then
-    # Create temporary array for expanded skip files
     temp_skip_files=()
     for pattern in "${SKIP_FILES[@]}"; do
-        # Use mapfile to handle multi-line output from expand_file_patterns
         while IFS= read -r expanded_item; do
             if [[ -n "$expanded_item" ]]; then
                 temp_skip_files+=("$expanded_item")
             fi
         done < <(expand_file_patterns "$pattern")
     done
-    # Update SKIP_FILES with expanded items
     SKIP_FILES=("${temp_skip_files[@]}")
 fi
 
-# Debug: show what we expanded to
-# echo "DEBUG: Expanded DIRECTORIES: ${DIRECTORIES[@]}" >&2
-# echo "DEBUG: Expanded FILES: ${FILES[@]}" >&2
-# echo "DEBUG: Expanded SKIP_DIRS: ${SKIP_DIRS[@]}" >&2
-# echo "DEBUG: Expanded SKIP_FILES: ${SKIP_FILES[@]}" >&2
-
-# Set flags based on the directory specification
 if [[ " ${DIRECTORIES[@]} " =~ " . " ]] && [[ ${#DIRECTORIES[@]} -eq 1 ]]; then
-    if [[ "$POSITIONAL_DIRECTORIES" == true ]]; then
-        # lscat or lscat . (positional) - non-recursive, show hidden
-        NON_RECURSIVE=true
-    elif [[ "$INCLUDE_HIDDEN" == true ]]; then
-        # lscat -d . -a - non-recursive, show hidden
-        NON_RECURSIVE=true
-    else
-        # lscat -d . (without -a) - non-recursive, hide hidden
-        NON_RECURSIVE=true
-    fi
+    NON_RECURSIVE=true
 fi
 
 VALID_DIRECTORIES=()
 VALID_FILES=()
 
-# Validate directories
 for dir in "${DIRECTORIES[@]}"; do
     if [[ -d "$dir" ]]; then
         VALID_DIRECTORIES+=("$dir")
@@ -1472,7 +1285,6 @@ for dir in "${DIRECTORIES[@]}"; do
     fi
 done
 
-# Validate files
 for file in "${FILES[@]}"; do
     if [[ -f "$file" ]]; then
         VALID_FILES+=("$file")
@@ -1483,7 +1295,6 @@ for file in "${FILES[@]}"; do
     fi
 done
 
-# Process output
 if [[ ${#OUTPUT_FILES[@]} -gt 0 ]]; then
     WRITING_TO_FILE=true
     for output_file in "${OUTPUT_FILES[@]}"; do
@@ -1492,10 +1303,8 @@ if [[ ${#OUTPUT_FILES[@]} -gt 0 ]]; then
         
         for dir in "${VALID_DIRECTORIES[@]}"; do
             if [[ "$POSITIONAL_DIRECTORIES" == true ]] && [[ "$dir" == "." ]]; then
-                # Positional . shows hidden
                 process_directory "$dir" true >> "$output_file"
             else
-                # -d specified, use normal behavior
                 process_directory "$dir" false >> "$output_file"
             fi
         done
@@ -1509,10 +1318,8 @@ if [[ ${#OUTPUT_FILES[@]} -gt 0 ]]; then
 else
     for dir in "${VALID_DIRECTORIES[@]}"; do
         if [[ "$POSITIONAL_DIRECTORIES" == true ]] && [[ "$dir" == "." ]]; then
-            # Positional . shows hidden
             process_directory "$dir" true
         else
-            # -d specified, use normal behavior
             process_directory "$dir" false
         fi
     done
