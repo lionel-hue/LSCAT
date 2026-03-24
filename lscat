@@ -1244,29 +1244,11 @@ if [[ ${#FILES[@]} -gt 0 ]]; then
     FILES=("${temp_files[@]}")
 fi
 
-if [[ ${#SKIP_DIRS[@]} -gt 0 ]]; then
-    temp_skip_dirs=()
-    for pattern in "${SKIP_DIRS[@]}"; do
-        while IFS= read -r expanded_item; do
-            if [[ -n "$expanded_item" ]]; then
-                temp_skip_dirs+=("$expanded_item")
-            fi
-        done < <(expand_patterns "$pattern")
-    done
-    SKIP_DIRS=("${temp_skip_dirs[@]}")
-fi
-
-if [[ ${#SKIP_FILES[@]} -gt 0 ]]; then
-    temp_skip_files=()
-    for pattern in "${SKIP_FILES[@]}"; do
-        while IFS= read -r expanded_item; do
-            if [[ -n "$expanded_item" ]]; then
-                temp_skip_files+=("$expanded_item")
-            fi
-        done < <(expand_file_patterns "$pattern")
-    done
-    SKIP_FILES=("${temp_skip_files[@]}")
-fi
+# NOTE: SKIP_DIRS and SKIP_FILES are intentionally NOT run through expand_patterns /
+# expand_file_patterns. Those functions resolve real filesystem paths and silently
+# drop any pattern that doesn't resolve — which would wipe out the skip list entirely.
+# should_skip_dir() / should_skip_file() already handle raw strings, globs, and
+# partial-path matching directly, so no pre-expansion is needed or wanted here.
 
 if [[ " ${DIRECTORIES[@]} " =~ " . " ]] && [[ ${#DIRECTORIES[@]} -eq 1 ]]; then
     NON_RECURSIVE=true
