@@ -422,45 +422,38 @@ local maxdepth="${3:-}"
 local include_hidden="${4:-false}"
 local is_hidden_parent="${5:-false}"
 
-local prune_parts=()
+local prune_patterns=""
 for pattern in "${SKIP_DIRS[@]}"; do
     pattern="${pattern%/}"
     [[ -z "$pattern" ]] && continue
     if [[ "$pattern" == /* ]]; then
-        prune_parts+=(-path "$pattern" -prune -o)
+        prune_patterns+=" -path \"$pattern\" -prune -o"
     elif [[ "$pattern" == ./* ]]; then
-        prune_parts+=(-path "${pattern#./}" -prune -o)
-        prune_parts+=(-path "*/${pattern#./}" -prune -o)
+        local p="${pattern#./}"
+        prune_patterns+=" -path \"$p\" -prune -o"
+        prune_patterns+=" -path \"*/$p\" -prune -o"
     else
-        prune_parts+=(-name "$pattern" -prune -o)
-        prune_parts+=(-path "*/$pattern" -prune -o)
-        prune_parts+=(-path "*/$pattern/*" -prune -o)
+        prune_patterns+=" -name \"$pattern\" -prune -o"
+        prune_patterns+=" -path \"*/$pattern\" -prune -o"
+        prune_patterns+=" -path \"*/$pattern/*\" -prune -o"
     fi
 done
 
+local hidden_filter=""
+if [[ "$include_hidden" == false ]]; then
+    if [[ "$is_hidden_parent" == true ]]; then
+        hidden_filter="-not -name '.*'"
+    else
+        hidden_filter="-not -name '.*' -not -path \"$base_dir/.*/*\""
+    fi
+fi
+
 local cmd="find \"$base_dir\""
 [[ -n "$maxdepth" ]] && cmd+=" $maxdepth"
-
-if [[ ${#prune_parts[@]} -gt 0 ]]; then
-    cmd+=" \( ${prune_parts[*]}"
-    cmd+=" -type $find_type"
-    if [[ "$include_hidden" == false ]]; then
-        if [[ "$is_hidden_parent" == true ]]; then
-            cmd+=" -not -name '.*'"
-        else
-            cmd+=" -not -name '.*' -not -path \"$base_dir/.*/*\""
-        fi
-    fi
-    cmd+=" \)"
+if [[ -n "$prune_patterns" ]]; then
+    cmd+=" \(${prune_patterns} -type $find_type $hidden_filter \)"
 else
-    cmd+=" -type $find_type"
-    if [[ "$include_hidden" == false ]]; then
-        if [[ "$is_hidden_parent" == true ]]; then
-            cmd+=" -not -name '.*'"
-        else
-            cmd+=" -not -name '.*' -not -path \"$base_dir/.*/*\""
-        fi
-    fi
+    cmd+=" -type $find_type $hidden_filter"
 fi
 
 echo "$cmd"
