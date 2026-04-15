@@ -417,54 +417,50 @@ done
 # =============================================================================
 build_find_cmd() {
 local base_dir="$1"
-local find_type="${2:-f}"  # 'f' for files, 'd' for directories
-local maxdepth="${3:-}"    # optional: -maxdepth N
+local find_type="${2:-f}"
+local maxdepth="${3:-}"
 local include_hidden="${4:-false}"
 local is_hidden_parent="${5:-false}"
 
-local cmd="find \"$base_dir\""
-
-# Add maxdepth if specified
-[[ -n "$maxdepth" ]] && cmd+=" $maxdepth"
-
-# Start building prune expressions for skipped directories
 local prune_parts=()
 for pattern in "${SKIP_DIRS[@]}"; do
-pattern="${pattern%/}"
-[[ -z "$pattern" ]] && continue
-# Handle various pattern formats for pruning
-if [[ "$pattern" == /* ]]; then
-# Absolute path pattern
-prune_parts+=(-path "$pattern" -prune -o)
-elif [[ "$pattern" == ./* ]]; then
-# Relative path starting with ./
-prune_parts+=(-path "${pattern#./}" -prune -o)
-prune_parts+=(-path "*/${pattern#./}" -prune -o)
-else
-# Simple name pattern - match at any depth
-prune_parts+=(-name "$pattern" -prune -o)
-prune_parts+=(-path "*/$pattern" -prune -o)
-prune_parts+=(-path "*/$pattern/*" -prune -o)
-fi
+    pattern="${pattern%/}"
+    [[ -z "$pattern" ]] && continue
+    if [[ "$pattern" == /* ]]; then
+        prune_parts+=(-path "$pattern" -prune -o)
+    elif [[ "$pattern" == ./* ]]; then
+        prune_parts+=(-path "${pattern#./}" -prune -o)
+        prune_parts+=(-path "*/${pattern#./}" -prune -o)
+    else
+        prune_parts+=(-name "$pattern" -prune -o)
+        prune_parts+=(-path "*/$pattern" -prune -o)
+        prune_parts+=(-path "*/$pattern/*" -prune -o)
+    fi
 done
 
-# Add prune expressions if we have any
+local cmd="find \"$base_dir\""
+[[ -n "$maxdepth" ]] && cmd+=" $maxdepth"
+
 if [[ ${#prune_parts[@]} -gt 0 ]]; then
-cmd+=" \( ${prune_parts[*]} \)"
-fi
-
-# Add type filter
-cmd+=" -type $find_type"
-
-# Add hidden file filtering
-if [[ "$include_hidden" == false ]]; then
-if [[ "$is_hidden_parent" == true ]]; then
-# Inside a hidden dir: only exclude direct hidden children
-cmd+=" -not -name '.*'"
+    cmd+=" \( ${prune_parts[*]}"
+    cmd+=" -type $find_type"
+    if [[ "$include_hidden" == false ]]; then
+        if [[ "$is_hidden_parent" == true ]]; then
+            cmd+=" -not -name '.*'"
+        else
+            cmd+=" -not -name '.*' -not -path \"$base_dir/.*/*\""
+        fi
+    fi
+    cmd+=" \)"
 else
-# Normal case: exclude hidden dirs and their contents
-cmd+=" -not -name '.*' -not -path \"$base_dir/.*/*\""
-fi
+    cmd+=" -type $find_type"
+    if [[ "$include_hidden" == false ]]; then
+        if [[ "$is_hidden_parent" == true ]]; then
+            cmd+=" -not -name '.*'"
+        else
+            cmd+=" -not -name '.*' -not -path \"$base_dir/.*/*\""
+        fi
+    fi
 fi
 
 echo "$cmd"
