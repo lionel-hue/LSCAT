@@ -8,4 +8,5 @@ output*.txt
 *.swp
 *.swo
 .vscode/
+test_output.txt
 .idea/
