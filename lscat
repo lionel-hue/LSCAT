@@ -422,38 +422,46 @@ local maxdepth="${3:-}"
 local include_hidden="${4:-false}"
 local is_hidden_parent="${5:-false}"
 
-local prune_patterns=""
+local cmd="find \"$base_dir\""
+[[ -n "$maxdepth" ]] && cmd+=" $maxdepth"
+
+local prune_parts=()
+
 for pattern in "${SKIP_DIRS[@]}"; do
     pattern="${pattern%/}"
     [[ -z "$pattern" ]] && continue
+    local clean_pattern="${pattern#./}"
+
     if [[ "$pattern" == /* ]]; then
-        prune_patterns+=" -path \"$pattern\" -prune -o"
-    elif [[ "$pattern" == ./* ]]; then
-        local p="${pattern#./}"
-        prune_patterns+=" -path \"$p\" -prune -o"
-        prune_patterns+=" -path \"*/$p\" -prune -o"
+        prune_parts+=("-path \"$pattern\"")
+    elif [[ "$clean_pattern" == */* ]]; then
+        prune_parts+=("-path \"*/${clean_pattern}\"")
     else
-        prune_patterns+=" -name \"$pattern\" -prune -o"
-        prune_patterns+=" -path \"*/$pattern\" -prune -o"
-        prune_patterns+=" -path \"*/$pattern/*\" -prune -o"
+        prune_parts+=("-name \"$clean_pattern\"")
     fi
 done
 
-local hidden_filter=""
-if [[ "$include_hidden" == false ]]; then
-    if [[ "$is_hidden_parent" == true ]]; then
-        hidden_filter="-not -name '.*'"
-    else
-        hidden_filter="-not -name '.*' -not -path \"$base_dir/.*/*\""
-    fi
+if [[ "$include_hidden" == false ]] && [[ "$is_hidden_parent" == false ]]; then
+    prune_parts+=("-name '.*'")
 fi
 
-local cmd="find \"$base_dir\""
-[[ -n "$maxdepth" ]] && cmd+=" $maxdepth"
-if [[ -n "$prune_patterns" ]]; then
-    cmd+=" \(${prune_patterns} -type $find_type $hidden_filter \)"
+if [[ ${#prune_parts[@]} -gt 0 ]]; then
+    local prune_expr="${prune_parts[0]}"
+    for (( j=1; j<${#prune_parts[@]}; j++ )); do
+        prune_expr+=" -o ${prune_parts[$j]}"
+    done
+
+    if [[ -n "$find_type" ]]; then
+        cmd+=" \( ${prune_expr} \) -prune -o -type ${find_type} -print"
+    else
+        cmd+=" \( ${prune_expr} \) -prune -o -mindepth 1 -print"
+    fi
 else
-    cmd+=" -type $find_type $hidden_filter"
+    if [[ -n "$find_type" ]]; then
+        cmd+=" -type ${find_type} -print"
+    else
+        cmd+=" -mindepth 1 -print"
+    fi
 fi
 
 echo "$cmd"
