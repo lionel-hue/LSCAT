@@ -47,6 +47,39 @@
 
 ---
 
+## MCP Integration
+
+### What is MCP?
+
+The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is an open standard that enables AI models to connect with external tools and data sources. It allows AI assistants (like Claude Desktop, Cursor, and other AI IDEs) to interact with your development environment in a structured way.
+
+### How lscat Fits In
+
+`lscat` is a natural companion to the MCP workflow. When you use an AI assistant in your browser or IDE:
+
+1. **Copy your entire codebase** using `lscat` to generate a complete project snapshot
+2. **Paste it into the AI prompt** — the AI now has full context of your project
+3. **Ask questions, request refactoring, or generate code** — the AI understands your codebase
+
+This is especially powerful for:
+- **Codebase-wide refactoring** — paste the whole project and ask for architectural changes
+- **Bug analysis across files** — give the AI complete context to trace issues
+- **Documentation generation** — generate docs based on your actual code structure
+- **Code reviews** — get comprehensive feedback on your entire project
+
+### Example: Preparing Your Codebase for an AI
+
+```bash
+# Create a compressed, flat snapshot of your entire project
+lscat -d "*" -sd node_modules -sd .git -sd dist -C -H none -D context.txt
+```
+
+Then open your AI prompt, paste the contents of `context.txt`, and start coding with full context.
+
+> **Note:** `lscat` is a standalone shell script. You can invoke it directly from any MCP-compatible environment (terminal, shell, CI/CD) and pipe the output into your AI workflow.
+
+---
+
 ## Installation
 
 ### Quick install (recommended)
