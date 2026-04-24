@@ -457,6 +457,7 @@ Contributions are welcome! You are free to fork, modify, and redistribute this p
 
 When contributing or redistributing:
 - **Do not** modify the project author or claim ownership.
+- **Do not** modify or falsify the commit history, authorship metadata, or project logs.
 - **Always** clearly acknowledge the original owner ([LIONEL SISSO]).
 - Ensure your changes follow the [License](#license).
 
