@@ -1,8 +1,13 @@
 # lscat
 
+[![License](https://img.shields.io/badge/license-Custom-blue.svg?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL%20%7C%20macOS-success?style=flat-square&logo=linux)]()
+[![Shell](https://img.shields.io/badge/shell-Bash%205.0%2B-4EAA25?style=flat-square&logo=gnubash)]()
+[![Made by](https://img.shields.io/badge/made%20by-LIONEL%20SISSO-FF6B6B?style=flat-square)]()
+
 **List and concatenate directory/file contents — built for humans and AI workflows.**
 
-`lscat` is a Bash utility that walks your directory tree, prints a structured overview, and concatenates file contents with customizable delimiters. It is especially useful for feeding entire codebases or documentation trees into AI prompts, generating snapshots for code reviews, or producing lightweight file digests.
+`lscat` is a Bash utility that walks your directory tree, prints a structured overview, and concatenates file contents with customizable delimiters. It is especially useful for feeding entire codebases into AI prompts via the [MCP (Model Context Protocol)](#mcp-integration) standard.
 
 ---
 
