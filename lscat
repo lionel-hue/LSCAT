@@ -2,8 +2,8 @@
 # =============================================================================
 # lscat - List and concatenate directory/file contents with advanced options
 # Version: 1.7.5 (FIXED: prune skipped dirs at find level)
-# License: MIT
-# Repository: https://github.com/yourusername/lscat
+# License: Custom (see LICENSE file)
+# Repository: https://github.com/lionel-hue/LSCAT
 # =============================================================================
 VERSION="1.7.5"
 SCRIPT_NAME=$(basename "$0")

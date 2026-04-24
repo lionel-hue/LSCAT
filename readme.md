@@ -20,6 +20,8 @@
 - [Output to File](#output-to-file)
 - [Examples](#examples)
 - [Tips & Best Practices](#tips--best-practices)
+- [Issues](#issues)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -440,6 +442,31 @@ lscat -d "." -de "━━━━━━━━━━━━━━━━━━━━�
 
 ---
 
+## Issues
+
+All bugs, feature requests, and technical issues must be reported in the **original repository** on GitHub:
+👉 [https://github.com/lionel-hue/LSCAT/issues](https://github.com/lionel-hue/LSCAT/issues)
+
+Please do **not** open issues in forks.
+
+---
+
+## Contributing
+
+Contributions are welcome! You are free to fork, modify, and redistribute this project for non-commercial use. If you have improvements or bug fixes, please submit a Pull Request to the original repository.
+
+When contributing or redistributing:
+- **Do not** modify the project author or claim ownership.
+- **Always** clearly acknowledge the original owner ([LIONEL SISSO]).
+- Ensure your changes follow the [License](#license).
+
+---
+
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+Custom License — see [LICENSE](LICENSE) for details.
+
+**Key Terms:**
+- **Non-Commercial Use Only**: This software cannot be used or redistributed for profit.
+- **Attribution Required**: You must credit the original author ([LIONEL SISSO]).
+- **Original Repo for Issues**: All issues must be raised in the main repository.
