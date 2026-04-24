@@ -14,6 +14,7 @@
 ## Table of Contents
 
 - [Features](#features)
+- [MCP Integration](#mcp-integration)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
